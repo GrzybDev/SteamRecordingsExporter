@@ -30,7 +30,7 @@ def main(
         ),
     ],
     output_file: Annotated[
-        Path,
+        Path | None,
         typer.Argument(
             writable=True,
             help="Output file path or directory where the exported media will be saved.",
@@ -100,11 +100,14 @@ def main(
             ):
                 if value == 0:
                     chunk_filename = get_filename(
-                        rep["initialization"], RepresentationID=rep_id
+                        rep["initialization"],  # type: ignore
+                        RepresentationID=rep_id,
                     )
                 else:
                     chunk_filename = get_filename(
-                        rep["media"], RepresentationID=rep_id, Number=value
+                        rep["media"],  # type: ignore
+                        RepresentationID=rep_id,
+                        Number=value,
                     )
 
                 chunk_path = input_dir / chunk_filename
