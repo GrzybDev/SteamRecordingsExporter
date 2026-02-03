@@ -2,7 +2,14 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.progress import track
+from ffmpeg import FFmpeg
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    track,
+)
 
 from steamrecordingsexporter.helpers import get_filename
 from steamrecordingsexporter.mpd import MPD
@@ -24,11 +31,9 @@ def main(
     ],
     output_file: Annotated[
         Path,
-        typer.Option(
-            file_okay=True,
-            dir_okay=False,
+        typer.Argument(
             writable=True,
-            help="Output file path where the exported media will be saved.",
+            help="Output file path or directory where the exported media will be saved.",
         ),
     ] = None,
     compact: Annotated[
@@ -40,6 +45,9 @@ def main(
         ),
     ] = False,
 ):
+    if output_file is not None and output_file.is_dir():
+        output_file = output_file / f"{input_dir.name}.mp4"
+
     # Verify whether "session.mpd" exists in the input directory
     session_file = input_dir / "session.mpd"
 
@@ -66,9 +74,10 @@ def main(
 
         if not (input_dir / init_chunk_filename).exists():
             typer.echo(
-                f"Warning: Initialization chunk '{init_chunk_filename}' not found for representation ID '{rep['id']}'. Skipping."
+                f"Error: Initialization chunk '{init_chunk_filename}' not found for representation ID '{rep['id']}'. Cannot continue.",
+                err=True,
             )
-            continue
+            raise typer.Exit(code=1)
 
         segment_filename_template = get_filename(
             rep["media"], RepresentationID=rep["id"], Number="*"
@@ -111,6 +120,49 @@ def main(
 
                 if compact:
                     chunk_path.unlink()
+
+    with Progress(
+        SpinnerColumn(finished_text="\u2713"),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+    ) as progress:
+        task = progress.add_task(
+            description="Merging streams into final output file...", total=1
+        )
+
+        # Now, merge the streams using FFmpeg
+        ffmpeg = (
+            FFmpeg()
+            .option("y")
+            .output(
+                str(output_file) if output_file else f"{input_dir.name}.mp4",
+                {"codec": "copy"},
+            )
+        )
+
+        for rep_id in representations_segments_count.keys():
+            stream_file = input_dir / get_filename(
+                stream_filename_template, RepresentationID=rep_id
+            )
+            ffmpeg = ffmpeg.input(str(stream_file))
+
+        ffmpeg.execute()
+        progress.update(
+            task,
+            description="Video exported successfully! (Saved as: {})".format(
+                output_file if output_file else f"{input_dir.name}.mp4"
+            ),
+            advance=1,
+        )
+
+    # Cleanup stream files
+    for rep_id in representations_segments_count.keys():
+        stream_file = input_dir / get_filename(
+            stream_filename_template, RepresentationID=rep_id
+        )
+
+        if stream_file.exists():
+            stream_file.unlink()
 
 
 if __name__ == "__main__":
