@@ -7,3 +7,10 @@ requires-python = ">=3.14"
 dependencies = [
     "typer>=0.21.1",
 ]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+steamrecordingsexporter = "steamrecordingsexporter.main:app"
