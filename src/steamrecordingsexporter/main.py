@@ -17,7 +17,9 @@ from steamrecordingsexporter.mpd import MPD
 app = typer.Typer()
 
 
-@app.command()
+@app.command(
+    help="Export a Steam recording clip from the specified input directory to a single video file."
+)
 def main(
     input_dir: Annotated[
         Path,
