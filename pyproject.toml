@@ -13,5 +13,10 @@ dependencies = [
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.18.0",
+]
+
 [project.scripts]
 steamrecordingsexporter = "steamrecordingsexporter.main:app"
