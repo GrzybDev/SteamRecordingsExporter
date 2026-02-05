@@ -12,6 +12,8 @@ jobs:
         include:
           - os: ubuntu-latest
             osname: Linux
+          - os: macos-latest
+            osname: macOS
           - os: windows-latest
             osname: Windows
 
@@ -25,24 +27,28 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: 3.14
+          python-version: 3.13
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          activate-environment: true
+      - name: Install dependencies
+        run: pip install .
 
-      - name: Build package
-        run: uv build
-
-      - name: Install project
-        run: uv sync --locked --dev
-     
       - name: Build executable
-        run: uv run pyinstaller -F --name SteamRecordingsExporter_${{ matrix.osname }} ./src/steamrecordingsexporter/main.py
-    
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          mode: standalone
+          script-name: src/steamrecordingsexporter/main.py
+          output-dir: build
+          output-file: ${{ github.event.repository.name }}_${{ matrix.osname }}_Debug
+          company-name: ${{ github.repository_owner }}
+          product-name: ${{ github.event.repository.name }} (${{ github.workflow }} - ${{ github.sha }})
+          file-version: 0.0.0.0
+          product-version: 0.0.0.0
+          copyright: "Copyright (c) 2026 ${{ github.repository_owner }}"
+          include-package: rich._unicode_data
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Release_${{ matrix.osname }}
-          path: dist
+          name: Debug_${{ matrix.osname }}
+          path: build/main.dist
+          include-hidden-files: true
