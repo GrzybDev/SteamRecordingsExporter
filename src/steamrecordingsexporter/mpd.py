@@ -1,5 +1,7 @@
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Optional
+from typing import List, Optional
+
+from steamrecordingsexporter.representation import Representation
 
 
 class MPD:
@@ -17,20 +19,36 @@ class MPD:
 
         return st
 
-    def get_representations(self) -> List[Dict[str, Optional[str]]]:
-        reps: List[Dict[str, Optional[str]]] = []
+    def get_representations(self) -> List[Representation]:
+        reps: List[Representation] = []
 
         for period in self.root.findall("mpd:Period", self.ns):
             for adaptation in period.findall("mpd:AdaptationSet", self.ns):
                 for representation in adaptation.findall("mpd:Representation", self.ns):
                     rep_id = representation.get("id")
                     st = self._find_segment_template(representation, adaptation)
-                    initialization = (
-                        st.get("initialization") if st is not None else None
-                    )
-                    media = st.get("media") if st is not None else None
+
+                    if st is not None:
+                        initialization = st.get("initialization")
+                        media = st.get("media")
+                        startNumber = st.get("startNumber") or "1"
+                    else:
+                        raise ValueError(
+                            f"Missing SegmentTemplate for representation ID: {rep_id}"
+                        )
+
+                    if rep_id is None or initialization is None or media is None:
+                        raise ValueError(
+                            f"Missing required attributes for representation ID: {rep_id}"
+                        )
+
                     reps.append(
-                        {"id": rep_id, "initialization": initialization, "media": media}
+                        Representation(
+                            id=int(rep_id),
+                            initialization=initialization,
+                            media=media,
+                            startNumber=int(startNumber),
+                        )
                     )
 
         return reps
