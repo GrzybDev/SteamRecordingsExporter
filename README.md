@@ -5,7 +5,7 @@ Tool to recover semi-corrupted Steam recordings and export Steam recordings with
 Table of Contents
 -----------------
 - [Features](#features)
-- [Requirements](#build-requirements)
+- [Requirements](#requirements)
 - [Installing](#installing)
 - [Usage](#usage)
 - [Credits](#credits)
@@ -21,14 +21,15 @@ Features
 Requirements
 ------------
 
-- Python 3.10+
+- Python 3.9+
 - System `ffmpeg` binary available on PATH.
-- Python packages: `python-ffmpeg`, `typer` (installable via pip or your environment manager).
 
 Installing
 ----------
 
-Install from source or via pip. Example using `pip` (recommended to use a virtualenv or `pipx`/`uv`):
+You can get pre-compiled build for Windows, MacOS and Linux from [Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases), these builds
+
+Or install from source or via pip. Example using `pip` (recommended to use a virtualenv or `pipx`/`uv`):
 
 ```sh
 pip install .
@@ -90,7 +91,6 @@ Credits
 -------
 
 - [GrzybDev](https://grzyb.dev)
-- Libraries and tools: `python-ffmpeg`, `typer`, `rich`, and `ffmpeg`.
 
 Special thanks:
 - Authors and maintainers of FFmpeg and the MPEG-DASH specification for the underlying technologies.
