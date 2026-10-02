@@ -36,7 +36,7 @@ jobs:
         uses: Nuitka/Nuitka-Action@main
         with:
           mode: standalone
-          script-name: src/steamrecordingsexporter/main.py
+          script-name: src/steamrecordingsexporter
           output-dir: build
           output-file: ${{ github.event.repository.name }}_${{ matrix.osname }}_Debug
           company-name: ${{ github.repository_owner }}
@@ -50,5 +50,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Debug_${{ matrix.osname }}
-          path: build/main.dist
+          path: build/steamrecordingsexporter.dist
           include-hidden-files: true

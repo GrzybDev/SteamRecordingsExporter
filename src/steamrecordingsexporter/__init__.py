@@ -168,7 +168,3 @@ def main(
 
         if stream_file.exists():
             stream_file.unlink()
-
-
-if __name__ == "__main__":
-    app()

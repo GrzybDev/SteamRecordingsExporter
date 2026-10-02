@@ -124,7 +124,7 @@ jobs:
               uses: Nuitka/Nuitka-Action@main
               with:
                 mode: onefile
-                script-name: src/steamrecordingsexporter/main.py
+                script-name: src/steamrecordingsexporter
                 output-dir: build
                 output-file: ${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}_${{ matrix.osname }}
                 company-name: ${{ github.repository_owner }}
