@@ -24,57 +24,51 @@ jobs:
         permissions:
           contents: write
         outputs:
-          current_version: ${{ steps.get_version.outputs.current_version }}
-          new_version: ${{ steps.bump.outputs.current-version || steps.bump_manual.outputs.current-version }}
+          version: ${{ steps.bump.outputs.current-version }}
         steps:
             - uses: actions/checkout@v4
 
-            - name: Get current version
-              id: get_version
-              if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version_type == 'rebuild' }}
-              run: |
-                pip install bump-my-version
-                echo "current_version=$(bump-my-version show current_version)" >> $GITHUB_OUTPUT
-
-            - name: Bump version
-              id: bump
-              uses: callowayproject/bump-my-version@master
-              if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version_type != 'rebuild' }}
-              with:
-                args: ${{ inputs.version_type }}
-
-            - name: Bump version (Manual)
-              id: bump_manual
-              uses: callowayproject/bump-my-version@master
-              if: ${{ github.event_name == 'release' }}
-              with:
-                args: --new-version ${{ github.ref_name }}
-
             - name: Install uv
               uses: astral-sh/setup-uv@v7
-              with:
-                activate-environment: true
+
+            - name: Resolve release version
+              id: bump
+              shell: bash
+              env:
+                EVENT_NAME: ${{ github.event_name }}
+                VERSION_TYPE: ${{ inputs.version_type }}
+                RELEASE_TAG: ${{ github.ref_name }}
+              run: |
+                previous_version=$(uvx bump-my-version show current_version)
+                if [[ "$EVENT_NAME" == "release" ]]; then
+                  release_version="${RELEASE_TAG#v}"
+                  if [[ "$release_version" != "$previous_version" ]]; then
+                    uvx bump-my-version bump --no-commit --no-tag --no-push-tag --new-version "$release_version"
+                  fi
+                elif [[ "$VERSION_TYPE" != "rebuild" ]]; then
+                  uvx bump-my-version bump --no-commit --no-tag --no-push-tag "$VERSION_TYPE"
+                fi
+                current_version=$(uvx bump-my-version show current_version)
+                bumped=false
+                if [[ "$current_version" != "$previous_version" ]]; then
+                  bumped=true
+                fi
+                {
+                  echo "previous-version=$previous_version"
+                  echo "current-version=$current_version"
+                  echo "bumped=$bumped"
+                } >> "$GITHUB_OUTPUT"
 
             - name: Update lockfile
               run: uv lock
 
             - name: Commit version bump
-              if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version_type != 'rebuild' && steps.bump.outputs.bumped == 'true' }}
+              if: ${{ steps.bump.outputs.bumped == 'true' }}
               uses: EndBug/add-and-commit@v9
               with:
                 default_author: github_actions
                 message: "Bump version: ${{ steps.bump.outputs.previous-version }} → ${{ steps.bump.outputs.current-version }}"
-                push: false # Temporarily push manually because of (https://github.com/EndBug/add-and-commit/issues/713)
-                tag: "v${{ steps.bump.outputs.current-version }}"
-                tag_push: "--force"
-
-            - name: Commit version bump (Manual)
-              if: ${{ github.event_name == 'release' && steps.bump.outputs.bumped == 'true' }}
-              uses: EndBug/add-and-commit@v9
-              with:
-                default_author: github_actions
-                message: "Bump version: ${{ steps.bump.outputs.previous-version }} → ${{ steps.bump.outputs.current-version }}"
-                push: false # Temporarily push manually because of (https://github.com/EndBug/add-and-commit/issues/713)
+                push: false # Push separately until EndBug/add-and-commit#713 is fixed.
                 tag: "v${{ steps.bump.outputs.current-version }}"
                 tag_push: "--force"
 
@@ -112,7 +106,7 @@ jobs:
             - uses: actions/checkout@v4
               if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version_type != 'rebuild' }}
               with:
-                ref: v${{ needs.bump_version.outputs.new_version }}
+                ref: v${{ needs.bump_version.outputs.version }}
 
             - name: Setup Python
               uses: actions/setup-python@v5
@@ -134,12 +128,12 @@ jobs:
                 mode: onefile
                 script-name: src/${{ steps.repo_name.outputs.lowercase }}
                 output-dir: build
-                output-file: ${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}_${{ matrix.osname }}
+                output-file: ${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.version }}_${{ matrix.osname }}
                 company-name: ${{ github.repository_owner }}
                 product-name: ${{ github.event.repository.name }}
-                file-description: ${{ github.event.repository.name }} for ${{ matrix.osname }} (version ${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }})
-                file-version: ${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}
-                product-version: ${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}
+                file-description: ${{ github.event.repository.name }} for ${{ matrix.osname }} (version ${{ needs.bump_version.outputs.version }})
+                file-version: ${{ needs.bump_version.outputs.version }}
+                product-version: ${{ needs.bump_version.outputs.version }}
                 copyright: "Copyright (c) 2026 ${{ github.repository_owner }}"
                 include-package: rich._unicode_data
 
@@ -147,14 +141,14 @@ jobs:
               if: ${{ github.event_name == 'release' && matrix.os != 'windows-latest' }}
               uses: softprops/action-gh-release@v2
               with:
-                files: build/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}_${{ matrix.osname }}${{ matrix.osext }}
+                files: build/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.version }}_${{ matrix.osname }}${{ matrix.osext }}
 
             - name: Upload release
               if: ${{ github.event_name == 'workflow_dispatch' && matrix.os != 'windows-latest' }}
               uses: softprops/action-gh-release@v2
               with:
-                files: build/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}_${{ matrix.osname }}${{ matrix.osext }}
-                tag_name: v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}
+                files: build/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.version }}_${{ matrix.osname }}${{ matrix.osext }}
+                tag_name: v${{ needs.bump_version.outputs.version }}
 
             - name: Upload windows release for code signing
               if: ${{ matrix.os == 'windows-latest' }}
@@ -163,4 +157,4 @@ jobs:
                 AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                 AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
                 AWS_ENDPOINT_URL: ${{ secrets.AWS_ENDPOINT_URL }}
-              run: aws s3 cp ./build/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}_${{ matrix.osname }}${{ matrix.osext }} s3://builds/unsigned/${{ github.event.repository.name }}/v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.new_version || needs.bump_version.outputs.current_version }}_${{ matrix.osname }}${{ matrix.osext }}
+              run: aws s3 cp ./build/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.version }}_${{ matrix.osname }}${{ matrix.osext }} s3://builds/unsigned/${{ github.event.repository.name }}/v${{ needs.bump_version.outputs.version }}/${{ github.event.repository.name }}_v${{ needs.bump_version.outputs.version }}_${{ matrix.osname }}${{ matrix.osext }}
