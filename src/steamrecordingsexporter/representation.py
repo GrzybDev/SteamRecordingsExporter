@@ -1,13 +1,14 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from steamrecordingsexporter.segments_data import SegmentData
 
 
 @dataclass
 class Representation:
-    id: int
+    id: str
     initialization: str
     media: str
     startNumber: int
 
-    segments: SegmentData | None = None
+    segments: Optional[SegmentData] = None

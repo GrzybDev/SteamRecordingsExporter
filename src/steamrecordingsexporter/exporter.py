@@ -64,7 +64,7 @@ class Exporter:
                 seg_end_number += 1
 
             seg_data["max"] = seg_end_number
-            representations[rep.id].segments = SegmentData(**seg_data)
+            rep.segments = SegmentData(**seg_data)
 
         return representations
 
