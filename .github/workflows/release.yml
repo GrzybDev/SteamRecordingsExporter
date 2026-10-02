@@ -21,7 +21,8 @@ jobs:
     bump_version:
         name: Bump Version
         runs-on: ubuntu-latest
-        permissions: write-all
+        permissions:
+          contents: write
         outputs:
           current_version: ${{ steps.get_version.outputs.current_version }}
           new_version: ${{ steps.bump.outputs.current-version || steps.bump_manual.outputs.current-version }}
@@ -86,7 +87,8 @@ jobs:
 
     build:
         name: Build for ${{ matrix.osname }}
-        permissions: write-all
+        permissions:
+          contents: write
         runs-on: ${{ matrix.os }}
         needs: bump_version
 
@@ -113,7 +115,7 @@ jobs:
                 ref: v${{ needs.bump_version.outputs.new_version }}
 
             - name: Setup Python
-              uses: actions/setup-python@v2
+              uses: actions/setup-python@v5
               with:
                 python-version: 3.13
 
