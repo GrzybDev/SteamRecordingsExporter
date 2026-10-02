@@ -149,7 +149,8 @@ class Exporter:
                 task = progress.add_task(
                     description="Merging streams into final output file...", total=1
                 )
-                ffmpeg = FFmpeg().option("y").option("nostdin")
+                # Keep relative timing when the first chunk of one stream is missing.
+                ffmpeg = FFmpeg().option("y").option("nostdin").option("copyts")
                 for stream_file in stream_files:
                     ffmpeg.input(str(stream_file))
                 ffmpeg.output(
@@ -157,6 +158,7 @@ class Exporter:
                     {
                         "codec": "copy",
                         "map": [str(index) for index in range(len(stream_files))],
+                        "avoid_negative_ts": "make_zero",
                     },
                 ).execute()
                 if temporary_output.stat().st_size == 0:
