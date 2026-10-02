@@ -42,12 +42,19 @@ jobs:
               with:
                 args: ${{ inputs.version_type }}
 
+            - name: Get release version
+              id: release_version
+              if: ${{ github.event_name == 'release' }}
+              env:
+                RELEASE_TAG: ${{ github.ref_name }}
+              run: echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
             - name: Bump version (Manual)
               id: bump_manual
               uses: callowayproject/bump-my-version@master
               if: ${{ github.event_name == 'release' }}
               with:
-                args: --new-version ${{ github.ref_name }}
+                args: --new-version ${{ steps.release_version.outputs.version }}
 
             - name: Install uv
               uses: astral-sh/setup-uv@v7
@@ -68,18 +75,18 @@ jobs:
                 tag_push: "--force"
 
             - name: Commit version bump (Manual)
-              if: ${{ github.event_name == 'release' && steps.bump.outputs.bumped == 'true' }}
+              if: ${{ github.event_name == 'release' && steps.bump_manual.outputs.bumped == 'true' }}
               uses: EndBug/add-and-commit@v9
               with:
                 default_author: github_actions
-                message: "Bump version: ${{ steps.bump.outputs.previous-version }} → ${{ steps.bump.outputs.current-version }}"
+                message: "Bump version: ${{ steps.bump_manual.outputs.previous-version }} → ${{ steps.bump_manual.outputs.current-version }}"
                 push: false # Temporarily push manually because of (https://github.com/EndBug/add-and-commit/issues/713)
-                tag: "v${{ steps.bump.outputs.current-version }}"
+                tag: "v${{ steps.bump_manual.outputs.current-version }}"
                 tag_push: "--force"
 
             - uses: ad-m/github-push-action@master
               name: Push changes
-              if: ${{ steps.bump.outputs.bumped == 'true' }}
+              if: ${{ steps.bump.outputs.bumped == 'true' || steps.bump_manual.outputs.bumped == 'true' }}
               with:
                 force: true
                 tags: true
