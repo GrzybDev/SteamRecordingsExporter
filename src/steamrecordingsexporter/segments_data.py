@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class SegmentData:
-    min: int
-    max: int
+    """Available media segment numbers in playback order, including gaps."""
+
+    numbers: tuple[int, ...]

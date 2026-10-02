@@ -1,7 +1,9 @@
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
+from ffmpeg import FFmpegError
 
 from steamrecordingsexporter.exporter import Exporter
 
@@ -19,11 +21,11 @@ def main(
             file_okay=False,
             dir_okay=True,
             readable=True,
-            help="Clip folder with media files you want to export (this is the folder with m4s files inside).",
+            help="Clip folder containing session.mpd and the media segment files.",
         ),
     ],
     output_file: Annotated[
-        Path | None,
+        Optional[Path],
         typer.Argument(
             writable=True,
             help="Output file path or directory where the exported media will be saved.",
@@ -34,27 +36,13 @@ def main(
         typer.Option(
             "--compact",
             "-c",
-            help="Remove processed chunks immediately to save up on disk space",
+            help="Remove processed chunks after a successful export to save disk space.",
         ),
     ] = False,
-):
-    if output_file is not None and output_file.is_dir():
-        output_file = output_file / f"{input_dir.name}.mp4"
-
-    # Verify whether "session.mpd" exists in the input directory
-    session_file = input_dir / "session.mpd"
-
-    if not session_file.exists():
-        typer.echo(
-            f"Error: 'session.mpd' not found in the input directory: {input_dir}"
-        )
-
-        raise typer.Exit(code=1)
-
-    exporter = Exporter(input_dir, output_file, compact)
-    representations = exporter.get_session_data(session_file)
-    exporter.join_segments(representations)
-
-    streams_to_export = [rep.id for rep in representations]
-    exporter.export(streams_to_export)
-    exporter.cleanup(streams_to_export)
+) -> None:
+    try:
+        output = Exporter(input_dir, output_file, compact).run()
+    except (OSError, ValueError, KeyError, ET.ParseError, FFmpegError) as error:
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(code=1) from error
+    typer.echo(f"Video exported successfully! (Saved as: {output})")
