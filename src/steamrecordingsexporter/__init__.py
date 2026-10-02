@@ -50,7 +50,6 @@ def main(
     if output_file is not None and output_file.is_dir():
         output_file = output_file / f"{input_dir.name}.mp4"
 
-    # Verify whether "session.mpd" exists in the input directory
     session_file = input_dir / "session.mpd"
 
     if not session_file.exists():
@@ -65,7 +64,6 @@ def main(
     representations_segments_count = {}
 
     for rep in representations:
-        # Basic validation of the representation data
         if rep["id"] is None or rep["initialization"] is None or rep["media"] is None:
             typer.echo(f"Warning: Skipping representation with missing data: {rep}")
             continue
@@ -135,7 +133,6 @@ def main(
             description="Merging streams into final output file...", total=1
         )
 
-        # Now, merge the streams using FFmpeg
         ffmpeg = (
             FFmpeg()
             .option("y")
@@ -160,7 +157,6 @@ def main(
             advance=1,
         )
 
-    # Cleanup stream files
     for rep_id in representations_segments_count.keys():
         stream_file = input_dir / get_filename(
             stream_filename_template, RepresentationID=rep_id
@@ -168,7 +164,3 @@ def main(
 
         if stream_file.exists():
             stream_file.unlink()
-
-
-if __name__ == "__main__":
-    app()

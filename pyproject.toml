@@ -1,17 +1,23 @@
 [project]
 name = "steamrecordingsexporter"
 version = "1.0.0"
-description = "Add your description here"
+description = "Tool to recover semi-corrupted Steam recordings and export Steam recordings without the Steam client"
+authors = [
+    {name = "Marek Grzyb",email = "marek@grzyb.dev"}
+]
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = [
+    "LICENSE.md",
+]
 requires-python = ">=3.9"
 dependencies = [
     "python-ffmpeg>=2.0.12",
     "typer>=0.21.1",
 ]
 
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+[tool.uv]
+package = true
 
 [project.scripts]
-steamrecordingsexporter = "steamrecordingsexporter.main:app"
+steamrecordingsexporter = "steamrecordingsexporter:app"
