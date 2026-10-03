@@ -6,12 +6,13 @@ from steamrecordingsexporter.representation import Representation
 
 
 class MPD:
+    NAMESPACES = {"mpd": "urn:mpeg:dash:schema:mpd:2011"}
+
     def __init__(self, mpd_data: Union[str, bytes]):
-        self.ns = {"mpd": "urn:mpeg:dash:schema:mpd:2011"}
         self.root = ET.fromstring(mpd_data.lstrip())
-        if self.root.tag != f"{{{self.ns['mpd']}}}MPD":
+        if self.root.tag != f"{{{self.NAMESPACES['mpd']}}}MPD":
             raise ValueError("Expected a DASH MPD document")
-        for base_url in self.root.iterfind(".//mpd:BaseURL", self.ns):
+        for base_url in self.root.iterfind(".//mpd:BaseURL", self.NAMESPACES):
             if (base_url.text or "").strip() not in ("", ".", "./"):
                 raise ValueError("DASH BaseURL paths are not supported; use local SegmentTemplate paths")
 
@@ -21,7 +22,7 @@ class MPD:
         attributes: dict[str, str] = {}
         found_template = False
         for element in (period, adaptation, representation):
-            template = element.find("mpd:SegmentTemplate", self.ns)
+            template = element.find("mpd:SegmentTemplate", self.NAMESPACES)
             if template is not None:
                 found_template = True
                 attributes.update(template.attrib)
@@ -32,7 +33,7 @@ class MPD:
         return attributes
 
     def get_representations(self) -> list[Representation]:
-        periods = self.root.findall("mpd:Period", self.ns)
+        periods = self.root.findall("mpd:Period", self.NAMESPACES)
         if len(periods) > 1:
             raise ValueError("Multiple DASH Period elements are not supported")
         if not periods:
@@ -41,8 +42,8 @@ class MPD:
         reps: list[Representation] = []
         representation_ids = set()
         period = periods[0]
-        for adaptation in period.findall("mpd:AdaptationSet", self.ns):
-            for representation in adaptation.findall("mpd:Representation", self.ns):
+        for adaptation in period.findall("mpd:AdaptationSet", self.NAMESPACES):
+            for representation in adaptation.findall("mpd:Representation", self.NAMESPACES):
                 rep_id = representation.get("id")
                 if rep_id is None or not rep_id.strip():
                     raise ValueError("Representation ID must not be empty")
