@@ -42,7 +42,7 @@ def main(
 ) -> None:
     try:
         output = Exporter(input_dir, output_file, compact).run()
-    except (OSError, ValueError, KeyError, ET.ParseError, FFmpegError) as error:
+    except (OSError, ValueError, ET.ParseError, FFmpegError) as error:
         typer.echo(f"Error: {error}", err=True)
         raise typer.Exit(code=1) from error
     typer.echo(f"Video exported successfully! (Saved as: {output})")
