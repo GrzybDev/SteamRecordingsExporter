@@ -41,7 +41,7 @@ def _template_parts(template: str) -> Iterator[tuple[str, Optional[str], Optiona
 
 def _format_value(name: str, fmt: Optional[str], values: dict) -> str:
     if name not in values:
-        raise KeyError(f"Missing value for '{name}'")
+        raise ValueError(f"Missing value for DASH template identifier '{name}'")
     value = values[name]
     if fmt is None:
         return str(value)

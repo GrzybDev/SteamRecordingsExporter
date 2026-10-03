@@ -14,7 +14,7 @@ class FilenameTemplateTests(unittest.TestCase):
         self.assertEqual(get_filename("$$Number$$-$$-$Number$", Number=7), "$Number$-$-7")
 
     def test_missing_identifier_is_reported(self):
-        with self.assertRaisesRegex(KeyError, "RepresentationID"):
+        with self.assertRaisesRegex(ValueError, "Missing value .*RepresentationID"):
             get_filename("$RepresentationID$-$Number$", Number=7)
 
     def test_unsupported_identifiers_are_reported(self):
@@ -67,7 +67,7 @@ class FilenameTemplateTests(unittest.TestCase):
             get_filename_pattern("$Number$.m4s", Number=7)
 
     def test_pattern_rejects_missing_other_values(self):
-        with self.assertRaisesRegex(KeyError, "RepresentationID"):
+        with self.assertRaisesRegex(ValueError, "Missing value .*RepresentationID"):
             get_filename_pattern("$RepresentationID$-$Number$.m4s")
 
     def test_repeated_number_requires_the_same_value(self):
