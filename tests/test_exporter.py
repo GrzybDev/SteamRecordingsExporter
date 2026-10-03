@@ -45,25 +45,25 @@ class ExporterTests(unittest.TestCase):
 
     def test_nonconsecutive_and_string_ids_keep_their_own_segments(self):
         reps = self.recording((('audio-main', (1, 2, 3)), ('42', (1,)), ('0', (1, 2))))
-        self.assertEqual([(rep.id, rep.segments.numbers) for rep in reps], [
+        self.assertEqual([(rep.id, rep.segment_numbers) for rep in reps], [
             ('audio-main', (1, 2, 3)), ('42', (1,)), ('0', (1, 2)),
         ])
 
     def test_gaps_and_missing_first_segment_do_not_truncate_recovery(self):
         with self.assertLogs("steamrecordingsexporter.exporter", level="WARNING"):
             reps = self.recording((('7', (2, 3, 5, 10)),))
-        self.assertEqual(reps[0].segments.numbers, (2, 3, 5, 10))
+        self.assertEqual(reps[0].segment_numbers, (2, 3, 5, 10))
 
     def test_discovery_ignores_noncanonical_or_unrelated_filenames(self):
         self.recording()
         for name in ('chunk-7-3.m4s', 'chunk-7-00003.m4s.bak', 'chunk-8-00003.m4s', 'chunk-7-00000.m4s'):
             (self.input_dir / name).write_bytes(b"unrelated")
         reps = self.exporter.get_session_data(self.session)
-        self.assertEqual(reps[0].segments.numbers, (1, 2))
+        self.assertEqual(reps[0].segment_numbers, (1, 2))
 
     def test_nested_media_paths_are_supported(self):
         reps = self.recording(media='media/$RepresentationID$/chunk-$Number$.m4s')
-        self.assertEqual(reps[0].segments.numbers, (1, 2))
+        self.assertEqual(reps[0].segment_numbers, (1, 2))
 
     def test_missing_manifest_names_the_expected_file(self):
         with self.assertRaisesRegex(FileNotFoundError, 'Manifest file not found'):

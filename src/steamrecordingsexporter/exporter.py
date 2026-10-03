@@ -11,7 +11,6 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from steamrecordingsexporter.helpers import get_filename, get_filename_pattern
 from steamrecordingsexporter.mpd import MPD
 from steamrecordingsexporter.representation import Representation
-from steamrecordingsexporter.segments_data import SegmentData
 
 logger = logging.getLogger(__name__)
 
@@ -91,15 +90,15 @@ class Exporter:
                     "The recording may contain gaps.",
                     rep.id,
                 )
-            rep.segments = SegmentData(tuple(numbers))
+            rep.segment_numbers = tuple(numbers)
 
         return representations
 
     def _chunk_paths(self, rep: Representation) -> list[Path]:
-        if rep.segments is None or not rep.segments.numbers:
+        if not rep.segment_numbers:
             raise ValueError(f"No segment data for representation '{rep.id}'.")
         return [self._initialization_path(rep)] + [
-            self._media_path(rep, number) for number in rep.segments.numbers
+            self._media_path(rep, number) for number in rep.segment_numbers
         ]
 
     def join_segments(

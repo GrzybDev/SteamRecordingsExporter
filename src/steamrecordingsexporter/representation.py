@@ -1,7 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
-
-from steamrecordingsexporter.segments_data import SegmentData
 
 
 @dataclass
@@ -11,4 +8,4 @@ class Representation:
     media: str
     start_number: int
 
-    segments: Optional[SegmentData] = None
+    segment_numbers: tuple[int, ...] = ()
