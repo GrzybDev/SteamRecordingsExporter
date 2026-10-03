@@ -147,12 +147,14 @@ version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "python-ffmpeg" },
+    { name = "rich" },
     { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "python-ffmpeg", specifier = ">=2.0.12" },
+    { name = "rich", specifier = ">=14.3.2" },
     { name = "typer", specifier = ">=0.21.1" },
 ]
 
