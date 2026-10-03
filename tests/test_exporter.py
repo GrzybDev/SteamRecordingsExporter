@@ -54,6 +54,12 @@ class ExporterTests(unittest.TestCase):
             reps = self.recording((('7', (2, 3, 5, 10)),))
         self.assertEqual(reps[0].segment_numbers, (2, 3, 5, 10))
 
+    def test_complete_recording_does_not_warn_about_gaps(self):
+        with patch("steamrecordingsexporter.exporter.logger.warning") as warning:
+            reps = self.recording((('7', (1, 2, 3)),))
+        warning.assert_not_called()
+        self.assertEqual(reps[0].segment_numbers, (1, 2, 3))
+
     def test_discovery_ignores_noncanonical_or_unrelated_filenames(self):
         self.recording()
         for name in ('chunk-7-3.m4s', 'chunk-7-00003.m4s.bak', 'chunk-8-00003.m4s', 'chunk-7-00000.m4s'):

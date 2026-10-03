@@ -45,15 +45,50 @@ class Exporter:
     def _media_path(self, rep: Representation, number: int) -> Path:
         return self._chunk_path(get_filename(rep.media, RepresentationID=rep.id, Number=number))
 
-    def get_session_data(self, session_file: Path) -> list[Representation]:
-        if not session_file.is_file():
-            raise FileNotFoundError(f"Manifest file not found: {session_file}")
-        representations = MPD(session_file.read_bytes()).get_representations()
-        filenames = [
+    def _list_files(self) -> list[str]:
+        """Return POSIX paths of all files below the input directory."""
+        return [
             (Path(directory) / filename).relative_to(self.input_dir).as_posix()
             for directory, _, files in os.walk(self.input_dir, onerror=_raise_scan_error)
             for filename in files
         ]
+
+    def _discover_segment_numbers(
+        self, rep: Representation, filenames: list[str]
+    ) -> tuple[int, ...]:
+        # Reject escaping templates even when no media segment matches.
+        self._media_path(rep, rep.start_number)
+        pattern = get_filename_pattern(rep.media, RepresentationID=rep.id)
+        numbers = []
+        for filename in filenames:
+            match = pattern.fullmatch(filename)
+            if match is None:
+                continue
+            number = int(match.group("Number"))
+            if number < rep.start_number:
+                continue
+            # Skip non-canonical spellings, e.g. extra zero padding.
+            if filename != get_filename(rep.media, RepresentationID=rep.id, Number=number):
+                continue
+            self._chunk_path(filename)
+            numbers.append(number)
+
+        numbers.sort()
+        if not numbers:
+            raise ValueError(f"No media segments found for representation '{rep.id}'.")
+        if numbers != list(range(rep.start_number, rep.start_number + len(numbers))):
+            logger.warning(
+                "Missing segments for representation '%s'; recovering the available segments. "
+                "The recording may contain gaps.",
+                rep.id,
+            )
+        return tuple(numbers)
+
+    def get_session_data(self, session_file: Path) -> list[Representation]:
+        if not session_file.is_file():
+            raise FileNotFoundError(f"Manifest file not found: {session_file}")
+        representations = MPD(session_file.read_bytes()).get_representations()
+        filenames = self._list_files()
 
         for rep in representations:
             init_path = self._initialization_path(rep)
@@ -61,36 +96,7 @@ class Exporter:
                 raise FileNotFoundError(
                     f"Initialization chunk '{init_path.name}' not found for representation '{rep.id}'."
                 )
-
-            # Reject escaping templates even when no media segment matches.
-            self._media_path(rep, rep.start_number)
-            pattern = get_filename_pattern(rep.media, RepresentationID=rep.id)
-            numbers = []
-            for filename in filenames:
-                match = pattern.fullmatch(filename)
-                if match is None:
-                    continue
-                number = int(match.group("Number"))
-                if number < rep.start_number:
-                    continue
-                expected = get_filename(rep.media, RepresentationID=rep.id, Number=number)
-                if filename != expected:
-                    continue
-                self._chunk_path(expected)
-                numbers.append(number)
-
-            numbers.sort()
-            if not numbers:
-                raise ValueError(f"No media segments found for representation '{rep.id}'.")
-            if numbers[0] != rep.start_number or any(
-                b != a + 1 for a, b in zip(numbers, numbers[1:])
-            ):
-                logger.warning(
-                    "Missing segments for representation '%s'; recovering the available segments. "
-                    "The recording may contain gaps.",
-                    rep.id,
-                )
-            rep.segment_numbers = tuple(numbers)
+            rep.segment_numbers = self._discover_segment_numbers(rep, filenames)
 
         return representations
 
