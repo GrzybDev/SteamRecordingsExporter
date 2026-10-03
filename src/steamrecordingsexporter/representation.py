@@ -9,6 +9,6 @@ class Representation:
     id: str
     initialization: str
     media: str
-    startNumber: int
+    start_number: int
 
     segments: Optional[SegmentData] = None

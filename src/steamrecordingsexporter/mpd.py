@@ -79,7 +79,7 @@ class MPD:
                         id=rep_id,
                         initialization=initialization,
                         media=media,
-                        startNumber=start_number,
+                        start_number=start_number,
                     )
                 )
 

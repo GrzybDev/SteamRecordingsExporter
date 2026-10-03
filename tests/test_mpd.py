@@ -30,7 +30,7 @@ class ManifestTests(unittest.TestCase):
         data = manifest("<Period><AdaptationSet>" + representation("01") + representation("audio") + "</AdaptationSet></Period>")
         reps = MPD(data).get_representations()
         self.assertEqual([rep.id for rep in reps], ["01", "audio"])
-        self.assertEqual([rep.startNumber for rep in reps], [1, 1])
+        self.assertEqual([rep.start_number for rep in reps], [1, 1])
 
     def test_template_attributes_inherit_through_all_levels(self):
         data = manifest('''<Period>
@@ -43,7 +43,7 @@ class ManifestTests(unittest.TestCase):
         rep = MPD(data).get_representations()[0]
         self.assertEqual(rep.initialization, "init-$RepresentationID$.m4s")
         self.assertEqual(rep.media, "adaptation-$Number%05d$.m4s")
-        self.assertEqual(rep.startNumber, 4)
+        self.assertEqual(rep.start_number, 4)
 
     def test_duplicate_ids_are_rejected_across_adaptations(self):
         data = manifest("<Period><AdaptationSet>" + representation("audio") + "</AdaptationSet><AdaptationSet>" + representation("audio") + "</AdaptationSet></Period>")

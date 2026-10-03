@@ -64,7 +64,7 @@ class Exporter:
                 )
 
             # Reject escaping templates even when no media segment matches.
-            self._media_path(rep, rep.startNumber)
+            self._media_path(rep, rep.start_number)
             pattern = get_filename_pattern(rep.media, RepresentationID=rep.id)
             numbers = []
             for filename in filenames:
@@ -72,7 +72,7 @@ class Exporter:
                 if match is None:
                     continue
                 number = int(match.group("Number"))
-                if number < rep.startNumber:
+                if number < rep.start_number:
                     continue
                 expected = get_filename(rep.media, RepresentationID=rep.id, Number=number)
                 if filename != expected:
@@ -83,7 +83,7 @@ class Exporter:
             numbers.sort()
             if not numbers:
                 raise ValueError(f"No media segments found for representation '{rep.id}'.")
-            if numbers[0] != rep.startNumber or any(
+            if numbers[0] != rep.start_number or any(
                 b != a + 1 for a, b in zip(numbers, numbers[1:])
             ):
                 logger.warning(
