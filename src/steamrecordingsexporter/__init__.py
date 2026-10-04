@@ -1,3 +1,4 @@
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Annotated, Optional
@@ -40,6 +41,8 @@ def main(
         ),
     ] = False,
 ) -> None:
+    # The exporter reports recoverable problems through logging; label them for CLI users.
+    logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.WARNING)
     try:
         output = Exporter(input_dir, output_file, compact).run()
     except (OSError, ValueError, ET.ParseError, FFmpegError) as error:

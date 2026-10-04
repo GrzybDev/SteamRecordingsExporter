@@ -1,3 +1,4 @@
+import logging
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -17,6 +18,18 @@ class CLITests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.runner = CliRunner()
+        self._isolate_logging()
+
+    def _isolate_logging(self):
+        """Keep the logging configuration the CLI installs from leaking into other tests."""
+        root_logger = logging.getLogger()
+        handlers, level = root_logger.handlers[:], root_logger.level
+
+        def restore():
+            root_logger.handlers[:] = handlers
+            root_logger.setLevel(level)
+
+        self.addCleanup(restore)
 
     def test_help(self):
         for color in (False, True):
@@ -38,6 +51,16 @@ class CLITests(unittest.TestCase):
                 self.assertEqual(result.exit_code, 1, result.output)
                 self.assertIn(f'Error: {error}', result.output)
                 self.assertNotIn('successfully', result.output)
+
+    def test_exporter_warnings_are_labelled_for_the_user(self):
+        def warn_then_export():
+            logging.getLogger('steamrecordingsexporter.exporter').warning('Recording may contain gaps')
+            return self.root / 'clip.mp4'
+
+        with patch('steamrecordingsexporter.Exporter.run', side_effect=warn_then_export):
+            result = self.runner.invoke(app, [str(self.root)])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn('WARNING: Recording may contain gaps', result.output)
 
     def test_compact_flag_reaches_the_exporter(self):
         for flag, expected in (([], False), (['--compact'], True), (['-c'], True)):
