@@ -26,6 +26,22 @@ class ManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'BaseURL paths are not supported'):
             MPD(data)
 
+    def test_remote_template_paths_are_explicitly_rejected(self):
+        for attribute in ("initialization", "media"):
+            with self.subTest(attribute=attribute):
+                templates = {"initialization": "init-$RepresentationID$.m4s", "media": "$Number$.m4s"}
+                templates[attribute] = "https://cdn.example.com/segment-$Number$.m4s"
+                data = manifest("<Period><AdaptationSet>" + representation(template=(
+                    f'<SegmentTemplate initialization="{templates["initialization"]}"'
+                    f' media="{templates["media"]}"/>')) + "</AdaptationSet></Period>")
+                with self.assertRaisesRegex(ValueError, f"Remote {attribute} template path"):
+                    MPD(data).get_representations()
+
+    def test_local_template_paths_containing_a_colon_are_accepted(self):
+        data = manifest("<Period><AdaptationSet>" + representation(
+            template='<SegmentTemplate initialization="init.m4s" media="t1:$Number$.m4s"/>') + "</AdaptationSet></Period>")
+        self.assertEqual(MPD(data).get_representations()[0].media, "t1:$Number$.m4s")
+
     def test_representation_ids_remain_strings(self):
         data = manifest("<Period><AdaptationSet>" + representation("01") + representation("audio") + "</AdaptationSet></Period>")
         reps = MPD(data).get_representations()

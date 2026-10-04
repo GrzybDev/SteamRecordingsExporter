@@ -1,8 +1,12 @@
+import re
 import xml.etree.ElementTree as ET
 from typing import Union
 
 from steamrecordingsexporter.helpers import get_filename, get_filename_pattern
 from steamrecordingsexporter.representation import Representation
+
+
+_REMOTE_TEMPLATE_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
 
 
 class MPD:
@@ -60,6 +64,12 @@ class MPD:
                     raise ValueError(
                         f"Missing required SegmentTemplate attributes for representation ID: {rep_id}"
                     )
+                for name, template in (("initialization", initialization), ("media", media)):
+                    if _REMOTE_TEMPLATE_PATTERN.match(template):
+                        raise ValueError(
+                            f"Remote {name} template path is not supported; "
+                            f"use a local path for representation ID: {rep_id}"
+                        )
 
                 try:
                     start_number = int(attributes.get("startNumber", "1"))

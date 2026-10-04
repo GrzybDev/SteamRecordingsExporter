@@ -91,7 +91,7 @@ Notes
 - Missing segments produce a warning; all available numbered segments from `startNumber` onward are joined in numeric order. Missing media may leave gaps in the recovered recording.
 - Temporary streams are isolated from the recording files and are removed after either success or failure. An existing output is replaced only after FFmpeg succeeds and produces a non-empty file.
 - `--compact` deletes only consumed initialization and media chunks after the output has been saved, together with any directory they emptied. It preserves `session.mpd`, unrelated files, and directories that still hold something. Allow enough disk space for temporary streams and the output during export.
-- Supported manifests have a single `Period`, local paths in `SegmentTemplate`, and `$RepresentationID$` / `$Number$` identifiers (including `$Number%05d$` and escaped `$$`). Time-based templates, nontrivial `BaseURL` paths, and multiple periods are rejected with an error.
+- Supported manifests have a single `Period`, local paths in `SegmentTemplate`, and `$RepresentationID$` / `$Number$` identifiers (including `$Number%05d$` and escaped `$$`). Time-based templates, `SegmentTemplate` paths pointing at a remote location, nontrivial `BaseURL` paths, and multiple periods are rejected with an error.
 
 Development
 -----------
