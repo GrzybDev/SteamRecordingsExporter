@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Optional
@@ -90,15 +91,17 @@ class Exporter:
         representations = MPD(session_file.read_bytes()).get_representations()
         filenames = self._list_files()
 
+        discovered = []
         for rep in representations:
             init_path = self._initialization_path(rep)
             if not init_path.is_file():
                 raise FileNotFoundError(
                     f"Initialization chunk '{init_path.name}' not found for representation '{rep.id}'."
                 )
-            rep.segment_numbers = self._discover_segment_numbers(rep, filenames)
-
-        return representations
+            discovered.append(
+                replace(rep, segment_numbers=self._discover_segment_numbers(rep, filenames))
+            )
+        return discovered
 
     def _chunk_paths(self, rep: Representation) -> list[Path]:
         if not rep.segment_numbers:

@@ -2,6 +2,7 @@ import io
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from unittest.mock import patch
 
@@ -69,6 +70,12 @@ class ExporterTests(unittest.TestCase):
 
     def test_nested_media_paths_are_supported(self):
         reps = self.recording(media='media/$RepresentationID$/chunk-$Number$.m4s')
+        self.assertEqual(reps[0].segment_numbers, (1, 2))
+
+    def test_representations_stay_immutable_after_discovery(self):
+        reps = self.recording()
+        with self.assertRaises(FrozenInstanceError):
+            reps[0].segment_numbers = (99,)
         self.assertEqual(reps[0].segment_numbers, (1, 2))
 
     def test_missing_manifest_names_the_expected_file(self):
