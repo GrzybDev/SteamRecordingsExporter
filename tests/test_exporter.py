@@ -253,6 +253,28 @@ class ExporterTests(unittest.TestCase):
             self.exporter.run()
         self.assertEqual([path.name for path in self.input_dir.iterdir()], ['session.mpd'])
 
+    def test_compact_keeps_going_when_a_chunk_cannot_be_removed(self):
+        self.recording()
+        self.exporter.compact = True
+        locked = (self.input_dir / 'chunk-7-00001.m4s').resolve()
+        unlink = Path.unlink
+
+        def flaky_unlink(path, *args, **kwargs):
+            if path == locked:
+                raise PermissionError('chunk is locked')
+            return unlink(path, *args, **kwargs)
+
+        def execute(command):
+            Path(command.arguments[-1]).write_bytes(b'MP4')
+
+        with patch('shutil.which', return_value='ffmpeg'), patch.object(FFmpeg, 'execute', execute), \
+                patch.object(Path, 'unlink', flaky_unlink), redirect_stdout(io.StringIO()):
+            with self.assertLogs('steamrecordingsexporter.exporter', level='WARNING') as logs:
+                self.assertEqual(self.exporter.run(), self.output)
+        self.assertIn('chunk is locked', logs.output[0])
+        self.assertEqual(self.output.read_bytes(), b'MP4')
+        self.assertEqual(sorted(path.name for path in self.input_dir.iterdir()), ['chunk-7-00001.m4s', 'session.mpd'])
+
 
 if __name__ == '__main__':
     unittest.main()

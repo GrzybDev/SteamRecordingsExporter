@@ -182,7 +182,10 @@ class Exporter:
             if directory != self.input_dir and directory.is_relative_to(self.input_dir)
         ]
         for source in sources:
-            source.unlink()
+            try:
+                source.unlink(missing_ok=True)
+            except OSError as error:
+                logger.warning("Could not remove processed chunk %s: %s", source, error)
         for directory in sorted(set(directories), key=lambda path: len(path.parts), reverse=True):
             try:
                 if not any(directory.iterdir()):
