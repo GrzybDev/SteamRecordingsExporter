@@ -1,7 +1,5 @@
 import logging
-import os
 import shutil
-from dataclasses import replace
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Optional
@@ -10,13 +8,9 @@ from ffmpeg import FFmpeg
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, track
 
 from steamrecordingsexporter.errors import ExportError
-from steamrecordingsexporter.manifest import Representation, parse_manifest
+from steamrecordingsexporter.recording import Stream, load_recording
 
 logger = logging.getLogger(__name__)
-
-
-def _raise_scan_error(error: OSError) -> None:
-    raise error
 
 
 class Exporter:
@@ -33,81 +27,14 @@ class Exporter:
         self.output_file = output_file.resolve()
         self.compact = compact
 
-    def _chunk_path(self, filename: str) -> Path:
-        path = (self.input_dir / filename).resolve()
-        if Path(filename).is_absolute() or not path.is_relative_to(self.input_dir):
-            raise ExportError(f"Chunk path must stay inside the input directory: {filename}")
-        return path
-
-    def _initialization_path(self, rep: Representation) -> Path:
-        return self._chunk_path(rep.initialization.format(rep.id))
-
-    def _media_path(self, rep: Representation, number: int) -> Path:
-        return self._chunk_path(rep.media.format(rep.id, number))
-
-    def _list_files(self) -> list[str]:
-        """Return POSIX paths of all files below the input directory."""
-        return [
-            (Path(directory) / filename).relative_to(self.input_dir).as_posix()
-            for directory, _, files in os.walk(self.input_dir, onerror=_raise_scan_error)
-            for filename in files
-        ]
-
-    def _discover_segment_numbers(
-        self, rep: Representation, filenames: list[str]
-    ) -> tuple[int, ...]:
-        # Reject escaping templates even when no media segment matches.
-        self._media_path(rep, rep.start_number)
-        numbers = sorted(
-            number for number in rep.media.numbers(rep.id, filenames) if number >= rep.start_number
-        )
-        for number in numbers:
-            self._media_path(rep, number)
-        if not numbers:
-            raise ExportError(f"No media segments found for representation '{rep.id}'.")
-        if numbers != list(range(rep.start_number, rep.start_number + len(numbers))):
-            logger.warning(
-                "Missing segments for representation '%s'; recovering the available segments. "
-                "The recording may contain gaps.",
-                rep.id,
-            )
-        return tuple(numbers)
-
-    def get_session_data(self, session_file: Path) -> list[Representation]:
-        if not session_file.is_file():
-            raise FileNotFoundError(f"Manifest file not found: {session_file}")
-        representations = parse_manifest(session_file.read_bytes())
-        filenames = self._list_files()
-
-        discovered = []
-        for rep in representations:
-            init_path = self._initialization_path(rep)
-            if not init_path.is_file():
-                raise FileNotFoundError(
-                    f"Initialization chunk '{init_path.name}' not found for representation '{rep.id}'."
-                )
-            discovered.append(
-                replace(rep, segment_numbers=self._discover_segment_numbers(rep, filenames))
-            )
-        return discovered
-
-    def _chunk_paths(self, rep: Representation) -> list[Path]:
-        if not rep.segment_numbers:
-            raise ExportError(f"No segment data for representation '{rep.id}'.")
-        return [self._initialization_path(rep)] + [
-            self._media_path(rep, number) for number in rep.segment_numbers
-        ]
-
-    def join_segments(
-        self, representations: list[Representation], stream_dir: Path
-    ) -> list[Path]:
+    def join_segments(self, streams: tuple[Stream, ...], stream_dir: Path) -> list[Path]:
         stream_files = []
-        for index, rep in enumerate(representations):
+        for index, stream in enumerate(streams):
             stream_file = stream_dir / f"stream-{index}.m4s"
             with stream_file.open("wb") as output_stream:
                 for chunk_path in track(
-                    self._chunk_paths(rep),
-                    description=f"Joining segments for media stream with ID: {rep.id}",
+                    stream.chunks,
+                    description=f"Joining segments for media stream with ID: {stream.id}",
                 ):
                     with chunk_path.open("rb") as chunk_stream:
                         shutil.copyfileobj(
@@ -189,15 +116,18 @@ class Exporter:
             raise FileNotFoundError(
                 "FFmpeg was not found on PATH. Install FFmpeg before exporting."
             )
-        session_file = self.input_dir / "session.mpd"
-        representations = self.get_session_data(session_file)
-        source_files = [
-            path for rep in representations for path in self._chunk_paths(rep)
-        ]
-        self._validate_output([session_file, *source_files])
+        recording = load_recording(self.input_dir)
+        for stream in recording.streams:
+            if stream.missing:
+                logger.warning(
+                    "Missing segments for representation '%s'; recovering the available "
+                    "segments. The recording may contain gaps.",
+                    stream.id,
+                )
+        self._validate_output([recording.manifest, *recording.chunks])
         with TemporaryDirectory(prefix="steamrecordingsexporter-") as directory:
-            stream_files = self.join_segments(representations, Path(directory))
+            stream_files = self.join_segments(recording.streams, Path(directory))
             self.export(stream_files)
         if self.compact:
-            self.cleanup(source_files)
+            self.cleanup(list(recording.chunks))
         return self.output_file

@@ -13,6 +13,7 @@ from unittest.mock import patch
 from ffmpeg import FFmpegError
 
 from steamrecordingsexporter.exporter import Exporter
+from steamrecordingsexporter.recording import load_recording
 
 
 FFMPEG = shutil.which("ffmpeg")
@@ -139,7 +140,7 @@ class ExportIntegrationTests(unittest.TestCase):
                 joined.mkdir()
                 output = self.root / f"missing-{scenario}.mp4"
                 exporter = Exporter(clip, output)
-                streams = exporter.join_segments(exporter.get_session_data(clip / "session.mpd"), joined)
+                streams = exporter.join_segments(load_recording(clip).streams, joined)
                 source_pts = [first_packet_pts(stream)[0] for stream in streams]
 
                 exporter.run()

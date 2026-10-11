@@ -17,8 +17,6 @@ class Representation:
     media: Template
     start_number: int
 
-    segment_numbers: tuple[int, ...] = ()
-
 
 def parse_manifest(data: bytes) -> list[Representation]:
     try:

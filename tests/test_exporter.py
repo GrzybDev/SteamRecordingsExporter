@@ -2,7 +2,6 @@ import io
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from dataclasses import FrozenInstanceError
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +9,8 @@ from ffmpeg import FFmpeg
 
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.exporter import Exporter
+from steamrecordingsexporter.recording import load_recording
+from support import write_recording
 
 
 class ExporterTests(unittest.TestCase):
@@ -25,100 +26,23 @@ class ExporterTests(unittest.TestCase):
         patch("steamrecordingsexporter.exporter.track", side_effect=lambda items, **kwargs: items).start()
 
     def recording(self, streams=(('7', (1, 2)),), initialization="init-$RepresentationID$.m4s", media="chunk-$RepresentationID$-$Number%05d$.m4s"):
-        from steamrecordingsexporter.template import Template
-
-        representations = []
-        for rep_id, numbers in streams:
-            representations.append(f'<Representation id="{rep_id}"/>')
-            init = self.input_dir / Template(initialization).format(rep_id)
-            init.parent.mkdir(parents=True, exist_ok=True)
-            init.write_bytes(f"INIT:{rep_id};".encode())
-            for number in numbers:
-                chunk = self.input_dir / Template(media).format(rep_id, number)
-                chunk.parent.mkdir(parents=True, exist_ok=True)
-                chunk.write_bytes(f"{rep_id}:{number};".encode())
+        write_recording(self.input_dir, dict(streams), initialization=initialization, media=media)
         self.session = self.input_dir / "session.mpd"
-        self.session.write_text(
-            '<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"><Period><AdaptationSet>'
-            f'<SegmentTemplate initialization="{initialization}" media="{media}"/>'
-            + ''.join(representations) + '</AdaptationSet></Period></MPD>', encoding="utf-8",
-        )
-        return self.exporter.get_session_data(self.session)
-
-    def test_nonconsecutive_and_string_ids_keep_their_own_segments(self):
-        reps = self.recording((('audio-main', (1, 2, 3)), ('42', (1,)), ('0', (1, 2))))
-        self.assertEqual([(rep.id, rep.segment_numbers) for rep in reps], [
-            ('audio-main', (1, 2, 3)), ('42', (1,)), ('0', (1, 2)),
-        ])
-
-    def test_gaps_and_missing_first_segment_do_not_truncate_recovery(self):
-        with self.assertLogs("steamrecordingsexporter.exporter", level="WARNING"):
-            reps = self.recording((('7', (2, 3, 5, 10)),))
-        self.assertEqual(reps[0].segment_numbers, (2, 3, 5, 10))
-
-    def test_complete_recording_does_not_warn_about_gaps(self):
-        with patch("steamrecordingsexporter.exporter.logger.warning") as warning:
-            reps = self.recording((('7', (1, 2, 3)),))
-        warning.assert_not_called()
-        self.assertEqual(reps[0].segment_numbers, (1, 2, 3))
-
-    def test_discovery_ignores_noncanonical_or_unrelated_filenames(self):
-        self.recording()
-        for name in ('chunk-7-3.m4s', 'chunk-7-00003.m4s.bak', 'chunk-8-00003.m4s', 'chunk-7-00000.m4s'):
-            (self.input_dir / name).write_bytes(b"unrelated")
-        reps = self.exporter.get_session_data(self.session)
-        self.assertEqual(reps[0].segment_numbers, (1, 2))
-
-    def test_nested_media_paths_are_supported(self):
-        reps = self.recording(media='media/$RepresentationID$/chunk-$Number$.m4s')
-        self.assertEqual(reps[0].segment_numbers, (1, 2))
-
-    def test_representations_stay_immutable_after_discovery(self):
-        reps = self.recording()
-        with self.assertRaises(FrozenInstanceError):
-            reps[0].segment_numbers = (99,)
-        self.assertEqual(reps[0].segment_numbers, (1, 2))
-
-    def test_missing_manifest_names_the_expected_file(self):
-        with self.assertRaisesRegex(FileNotFoundError, 'Manifest file not found'):
-            self.exporter.get_session_data(self.input_dir / 'session.mpd')
-
-    def test_missing_initialization_is_an_error(self):
-        self.recording()
-        (self.input_dir / 'init-7.m4s').unlink()
-        with self.assertRaisesRegex(FileNotFoundError, "Initialization chunk"):
-            self.exporter.get_session_data(self.session)
-
-    def test_unreadable_directory_is_an_error_before_export(self):
-        self.recording()
-        with patch('os.scandir', side_effect=PermissionError('Cannot scan recording')):
-            with self.assertRaisesRegex(PermissionError, 'Cannot scan recording'):
-                self.exporter.get_session_data(self.session)
-
-    def test_init_without_media_is_an_error(self):
-        with self.assertRaisesRegex(ExportError, "No media segments"):
-            self.recording((('7', ()),))
-
-    def test_chunk_path_cannot_escape_input_directory(self):
-        outside = self.root / 'init-7.m4s'
-        outside.write_bytes(b"untouched")
-        with self.assertRaisesRegex(ExportError, "inside the input directory"):
-            self.recording(initialization='../init-$RepresentationID$.m4s')
-        self.assertTrue(outside.is_file())
+        return load_recording(self.input_dir)
 
     def test_join_preserves_sources_even_when_they_use_stream_filenames(self):
         reps = self.recording(initialization='stream-$RepresentationID$.m4s')
         stream_dir = self.root / 'streams'
         stream_dir.mkdir()
-        paths = self.exporter.join_segments(reps, stream_dir)
-        self.assertEqual(paths[0].read_bytes(), b'INIT:7;7:1;7:2;')
-        self.assertEqual((self.input_dir / 'stream-7.m4s').read_bytes(), b'INIT:7;')
+        paths = self.exporter.join_segments(reps.streams, stream_dir)
+        self.assertEqual(paths[0].read_bytes(), b'stream-7.m4s;chunk-7-00001.m4s;chunk-7-00002.m4s;')
+        self.assertEqual((self.input_dir / 'stream-7.m4s').read_bytes(), b'stream-7.m4s;')
 
     def test_chunk_removed_after_discovery_is_an_error(self):
         reps = self.recording()
         (self.input_dir / 'chunk-7-00002.m4s').unlink()
         with self.assertRaises(FileNotFoundError):
-            self.exporter.join_segments(reps, self.root)
+            self.exporter.join_segments(reps.streams, self.root)
 
     def test_output_cannot_overwrite_manifest_or_chunk(self):
         self.recording()
@@ -142,7 +66,7 @@ class ExporterTests(unittest.TestCase):
         with patch('shutil.which', return_value='ffmpeg'):
             with self.assertRaisesRegex(ExportError, 'overwrite a recording source'):
                 self.exporter.run()
-        self.assertEqual(source.read_bytes(), b'7:1;')
+        self.assertEqual(source.read_bytes(), b'chunk-7-00001.m4s;')
 
     def test_missing_ffmpeg_preserves_sources(self):
         self.recording()
@@ -245,21 +169,6 @@ class ExporterTests(unittest.TestCase):
             sorted(path.relative_to(self.input_dir).as_posix() for path in self.input_dir.rglob('*')),
             ['media', 'media/7', 'media/7/notes.txt', 'session.mpd'],
         )
-
-    def test_compact_deduplicates_shared_initialization_path_aliases(self):
-        self.recording((('7', (1,)), ('8', (1,))), initialization='shared-init.m4s')
-        self.session.write_text(self.session.read_text().replace(
-            '<Representation id="8"/>',
-            '<Representation id="8"><SegmentTemplate initialization="subdir/../shared-init.m4s"/></Representation>',
-        ))
-        self.exporter.compact = True
-
-        def execute(command):
-            Path(command.arguments[-1]).write_bytes(b'MP4')
-
-        with patch('shutil.which', return_value='ffmpeg'), patch.object(FFmpeg, 'execute', execute), redirect_stdout(io.StringIO()):
-            self.exporter.run()
-        self.assertEqual([path.name for path in self.input_dir.iterdir()], ['session.mpd'])
 
     def test_compact_keeps_going_when_a_chunk_cannot_be_removed(self):
         self.recording()
