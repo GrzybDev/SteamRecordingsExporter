@@ -93,6 +93,7 @@ def export(
     recording: Recording, output: Path, progress: Progress | None = None, compact: bool = False
 ) -> None:
     """Join the chunks of each stream and merge the streams into output without re-encoding."""
+    _check_output(recording, output)
     progress = progress or Progress(disable=True)
     with TemporaryDirectory(prefix="steamrecordingsexporter-") as scratch:
         joined = []
@@ -107,6 +108,15 @@ def export(
         task = progress.add_task("Merging the streams", total=None)
         _merge(joined, output)
         progress.update(task, total=1, completed=1)
+
+
+def _check_output(recording: Recording, output: Path) -> None:
+    if not output.parent.is_dir():
+        raise ExportError(f"The output folder does not exist: {output.parent}")
+    if output.exists() and any(
+        output.samefile(source) for source in (recording.manifest, *recording.chunks)
+    ):
+        raise ExportError(f"The output would overwrite a file of the recording: {output}")
 
 
 def _join(chunks: Iterable[Path], target: Path, compact: bool) -> None:

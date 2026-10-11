@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -50,6 +51,23 @@ class ExportTests(unittest.TestCase):
                     sorted(path.name for path in self.root.iterdir()), ["clip", "clip.mp4"]
                 )
                 self.assertFalse(runs[0].inputs[0].parent.exists())
+
+    def test_refuses_outputs_that_would_overwrite_the_recording(self):
+        hardlink = self.root / "hardlink.mp4"
+        os.link(self.folder / "chunk-stream0-00001.m4s", hardlink)
+        outputs = {
+            self.folder / "session.mpd": "overwrite a file of the recording",
+            self.folder / "init-stream1.m4s": "overwrite a file of the recording",
+            hardlink: "overwrite a file of the recording",
+            self.root / "missing" / "clip.mp4": "output folder does not exist",
+        }
+        before = contents(self.folder)
+        for output, message in outputs.items():
+            with self.subTest(output=output.name), fake_ffmpeg() as runs:
+                with self.assertRaisesRegex(ExportError, message):
+                    export(load_recording(self.folder), output)
+                self.assertEqual(runs, [])
+        self.assertEqual(contents(self.folder), before)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,10 @@ class Recording:
     streams: tuple[Stream, ...]
 
     @property
+    def manifest(self) -> Path:
+        return self.folder / MANIFEST
+
+    @property
     def chunks(self) -> tuple[Path, ...]:
         # Streams may share an initialization chunk.
         return tuple(dict.fromkeys(chunk for stream in self.streams for chunk in stream.chunks))
