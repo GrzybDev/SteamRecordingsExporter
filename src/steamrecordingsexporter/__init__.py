@@ -1,170 +1,132 @@
+import shutil
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from ffmpeg import FFmpeg
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    track,
-)
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
-from steamrecordingsexporter.helpers import get_filename
-from steamrecordingsexporter.mpd import MPD
+from steamrecordingsexporter.errors import ExportError
+from steamrecordingsexporter.recording import Recording, Stream, load_recording
 
 app = typer.Typer()
 
 
-@app.command(
-    help="Export a Steam recording clip from the specified input directory to a single video file."
-)
+@app.command(help="Export a Steam recording to a single video file.")
 def main(
     input_dir: Annotated[
         Path,
         typer.Argument(
             exists=True,
             file_okay=False,
-            dir_okay=True,
             readable=True,
-            help="Clip folder with media files you want to export (this is the folder with m4s files inside).",
+            help="Recording folder holding session.mpd and the chunks it lists.",
         ),
     ],
     output_file: Annotated[
         Path | None,
         typer.Argument(
             writable=True,
-            help="Output file path or directory where the exported media will be saved.",
+            help="Output file, or the folder to save it in as <recording folder name>.mp4.",
         ),
     ] = None,
     compact: Annotated[
         bool,
         typer.Option(
-            "--compact",
-            "-c",
-            help="Remove processed chunks immediately to save up on disk space",
+            "--compact", "-c", help="Remove processed chunks immediately to save up on disk space"
         ),
     ] = False,
-):
-    if output_file is not None and output_file.is_dir():
-        output_file = output_file / f"{input_dir.name}.mp4"
+) -> None:
+    try:
+        recording = load_recording(input_dir)
+        output = _output_path(output_file, recording)
+        warnings = [_gap_warning(stream) for stream in recording.streams if stream.missing]
+        for warning in warnings:
+            _warn(warning)
+        with Progress(
+            TextColumn("{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+        ) as progress:
+            export(recording, output, progress, compact)
+    except (ExportError, OSError) as error:
+        typer.echo(f"Error: {error}")
+        raise typer.Exit(1) from error
+    count = len(warnings)
+    summary = f" with {count} warning{'' if count == 1 else 's'}" if count else ""
+    typer.echo(f"Exported{summary}: {output}")
 
-    # Verify whether "session.mpd" exists in the input directory
-    session_file = input_dir / "session.mpd"
 
-    if not session_file.exists():
-        typer.echo(
-            f"Error: 'session.mpd' not found in the input directory: {input_dir}"
+def _output_path(output: Path | None, recording: Recording) -> Path:
+    output = (output or Path.cwd()).resolve()
+    if output.is_dir():
+        return output / f"{recording.folder.name}.mp4"
+    return output
+
+
+def _gap_warning(stream: Stream) -> str:
+    total = len(stream.segments) + len(stream.missing)
+    return (
+        f"Stream {stream.id!r} is missing {len(stream.missing)} of {total} segments "
+        f"({_ranges(stream.missing)}), so the video will have gaps"
+    )
+
+
+def _ranges(numbers: Sequence[int]) -> str:
+    spans: list[list[int]] = []
+    for number in numbers:
+        if spans and spans[-1][1] == number - 1:
+            spans[-1][1] = number
+        else:
+            spans.append([number, number])
+    return ", ".join(str(first) if first == last else f"{first}-{last}" for first, last in spans)
+
+
+def _warn(message: str) -> None:
+    typer.echo(f"Warning: {message}")
+
+
+def export(
+    recording: Recording, output: Path, progress: Progress | None = None, compact: bool = False
+) -> None:
+    """Join the chunks of each stream and merge the streams into output without re-encoding."""
+    progress = progress or Progress(disable=True)
+    joined = []
+    for stream in recording.streams:
+        target = recording.folder / f"stream-{stream.id}.m4s"
+        _join(
+            progress.track(stream.chunks, description=f"Joining stream {stream.id}"),
+            target,
+            compact,
         )
+        joined.append(target)
+    task = progress.add_task("Merging the streams", total=None)
+    _merge(joined, output)
+    progress.update(task, total=1, completed=1)
+    for target in joined:
+        target.unlink()
 
-        raise typer.Exit(code=1)
 
-    __mpd = MPD(session_file.read_text())
-    representations = __mpd.get_representations()
-    representations_segments_count = {}
+def _join(chunks: Iterable[Path], target: Path, compact: bool) -> None:
+    with target.open("wb") as joined:
+        for chunk in chunks:
+            with chunk.open("rb") as source:
+                shutil.copyfileobj(source, joined)
+            if compact:
+                chunk.unlink()
 
-    for rep in representations:
-        # Basic validation of the representation data
-        if rep["id"] is None or rep["initialization"] is None or rep["media"] is None:
-            typer.echo(f"Warning: Skipping representation with missing data: {rep}")
-            continue
 
-        init_chunk_filename = get_filename(
-            rep["initialization"], RepresentationID=rep["id"]
-        )
-
-        if not (input_dir / init_chunk_filename).exists():
-            typer.echo(
-                f"Error: Initialization chunk '{init_chunk_filename}' not found for representation ID '{rep['id']}'. Cannot continue.",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-
-        segment_filename_template = get_filename(
-            rep["media"], RepresentationID=rep["id"], Number="*"
-        )
-
-        segment_files = list(input_dir.glob(segment_filename_template))
-        representations_segments_count[rep["id"]] = len(segment_files)
-
-    stream_filename_template = "stream-$RepresentationID$.m4s"
-
-    for rep_id, segments_count in representations_segments_count.items():
-        stream_file = input_dir / get_filename(
-            stream_filename_template, RepresentationID=rep_id
-        )
-
-        with open(stream_file, "wb") as output_stream:
-            for value in track(
-                range(segments_count + 1),
-                description=f"Joining segments for media stream with ID: {rep_id}",
-            ):
-                if value == 0:
-                    chunk_filename = get_filename(
-                        rep["initialization"],  # type: ignore
-                        RepresentationID=rep_id,
-                    )
-                else:
-                    chunk_filename = get_filename(
-                        rep["media"],  # type: ignore
-                        RepresentationID=rep_id,
-                        Number=value,
-                    )
-
-                chunk_path = input_dir / chunk_filename
-
-                if not chunk_path.exists():
-                    typer.echo(
-                        f"Warning: Expected chunk file '{chunk_filename}' not found for representation ID '{rep_id}'. Skipping remaining segments."
-                    )
-                    break
-
-                output_stream.write(chunk_path.read_bytes())
-                output_stream.flush()
-
-                if compact:
-                    chunk_path.unlink()
-
-    with Progress(
-        SpinnerColumn(finished_text="\u2713"),
-        TextColumn("[progress.description]{task.description}"),
-        TimeElapsedColumn(),
-    ) as progress:
-        task = progress.add_task(
-            description="Merging streams into final output file...", total=1
-        )
-
-        # Now, merge the streams using FFmpeg
-        ffmpeg = (
-            FFmpeg()
-            .option("y")
-            .output(
-                str(output_file) if output_file else f"{input_dir.name}.mp4",
-                {"codec": "copy"},
-            )
-        )
-
-        for rep_id in representations_segments_count.keys():
-            stream_file = input_dir / get_filename(
-                stream_filename_template, RepresentationID=rep_id
-            )
-            ffmpeg = ffmpeg.input(str(stream_file))
-
-        ffmpeg.execute()
-        progress.update(
-            task,
-            description="Video exported successfully! (Saved as: {})".format(
-                output_file if output_file else f"{input_dir.name}.mp4"
-            ),
-            advance=1,
-        )
-
-    # Cleanup stream files
-    for rep_id in representations_segments_count.keys():
-        stream_file = input_dir / get_filename(
-            stream_filename_template, RepresentationID=rep_id
-        )
-
-        if stream_file.exists():
-            stream_file.unlink()
+def _merge(streams: Sequence[Path], output: Path) -> None:
+    command = FFmpeg().option("y").option("nostdin")
+    # Each stream keeps its own timestamps, so one that lost its first segments stays in sync.
+    command.option("copyts")
+    for stream in streams:
+        command.input(stream)
+    command.output(
+        output,
+        codec="copy",
+        avoid_negative_ts="make_zero",
+    )
+    command.execute()

@@ -1,5 +1,10 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import patch
+
+from ffmpeg import FFmpeg
 
 from steamrecordingsexporter.template import Template
 
@@ -34,3 +39,35 @@ def write_recording(
         f' startNumber="{start_number}"/>{representations}</AdaptationSet></Period></MPD>'
     )
     return folder.resolve()
+
+
+def contents(folder: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(folder).as_posix(): path.read_bytes()
+        for path in folder.rglob("*")
+        if path.is_file()
+    }
+
+
+@dataclass
+class FFmpegRun:
+    arguments: list[str]
+    inputs: list[Path]
+    input_contents: list[bytes]
+
+
+@contextmanager
+def fake_ffmpeg() -> Iterator[list[FFmpegRun]]:
+    """Stand in for FFmpeg, recording what each run reads and writing its output."""
+    runs = []
+
+    def execute(command: FFmpeg) -> None:
+        arguments = command.arguments
+        inputs = [
+            Path(arguments[i + 1]) for i, argument in enumerate(arguments) if argument == "-i"
+        ]
+        runs.append(FFmpegRun(arguments, inputs, [path.read_bytes() for path in inputs]))
+        Path(arguments[-1]).write_bytes(b"MP4")
+
+    with patch.object(FFmpeg, "execute", autospec=True, side_effect=execute):
+        yield runs
