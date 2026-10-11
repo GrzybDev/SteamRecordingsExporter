@@ -22,7 +22,7 @@ Features
 Requirements
 ------------
 
-- Python 3.9+
+- Python 3.14+
 - System `ffmpeg` binary available on PATH.
 
 Installing
@@ -103,7 +103,7 @@ pip install .
 python -m unittest discover -s tests -v
 ```
 
-Integration tests generate a short DASH recording and verify the exported video and both audio tracks using FFmpeg and ffprobe. Both binaries must be on PATH; otherwise these tests are skipped. CI runs the suite on Python 3.9 and 3.14.
+Integration tests generate a short DASH recording and verify the exported video and both audio tracks using FFmpeg and ffprobe. Both binaries must be on PATH; otherwise these tests are skipped.
 
 Credits
 -------
