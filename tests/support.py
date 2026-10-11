@@ -57,7 +57,9 @@ class FFmpegRun:
 
 
 @contextmanager
-def fake_ffmpeg(output: bytes = b"MP4") -> Iterator[list[FFmpegRun]]:
+def fake_ffmpeg(
+    output: bytes = b"MP4", error: Exception | None = None
+) -> Iterator[list[FFmpegRun]]:
     """Stand in for FFmpeg, recording what each run reads and writing its output."""
     runs = []
 
@@ -68,6 +70,11 @@ def fake_ffmpeg(output: bytes = b"MP4") -> Iterator[list[FFmpegRun]]:
         ]
         runs.append(FFmpegRun(arguments, inputs, [path.read_bytes() for path in inputs]))
         Path(arguments[-1]).write_bytes(output)
+        if error:
+            raise error
 
-    with patch.object(FFmpeg, "execute", autospec=True, side_effect=execute):
+    with (
+        patch("shutil.which", return_value="ffmpeg"),
+        patch.object(FFmpeg, "execute", autospec=True, side_effect=execute),
+    ):
         yield runs

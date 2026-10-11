@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from ffmpeg import FFmpegError
 from typer.testing import CliRunner
 
 from steamrecordingsexporter import app
@@ -16,8 +17,8 @@ class CliTests(unittest.TestCase):
         self.root = Path(directory.name).resolve()
         self.folder = write_recording(self.root / "clip", {"0": [1, 3], "1": [1, 2, 4, 5]})
 
-    def run_cli(self, *arguments):
-        with fake_ffmpeg():
+    def run_cli(self, *arguments, **ffmpeg):
+        with fake_ffmpeg(**ffmpeg):
             return CliRunner().invoke(app, [str(argument) for argument in arguments])
 
     def test_exports_and_counts_the_warnings(self):
@@ -60,10 +61,19 @@ class CliTests(unittest.TestCase):
 
     def test_reports_errors_with_a_failing_exit_code(self):
         (self.root / "empty").mkdir()
-        result = self.run_cli(self.root / "empty")
-        self.assertEqual(result.exit_code, 1, result.output)
-        self.assertIn("Error: session.mpd was not found", result.output)
-        self.assertNotIn("Exported", result.output)
+        cases = {
+            "Error: session.mpd was not found": ([self.root / "empty"], {}),
+            "Error: FFmpeg could not merge the streams: Invalid data": (
+                [self.folder, self.root],
+                {"error": FFmpegError("Invalid data", [])},
+            ),
+        }
+        for message, (arguments, ffmpeg) in cases.items():
+            with self.subTest(message=message):
+                result = self.run_cli(*arguments, **ffmpeg)
+                self.assertEqual(result.exit_code, 1, result.output)
+                self.assertIn(message, result.output)
+                self.assertNotIn("Exported", result.output)
 
 
 if __name__ == "__main__":

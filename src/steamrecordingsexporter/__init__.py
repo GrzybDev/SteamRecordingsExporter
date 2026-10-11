@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from typing import Annotated
 
 import typer
-from ffmpeg import FFmpeg
+from ffmpeg import FFmpeg, FFmpegError
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
@@ -103,6 +103,9 @@ def _warn(message: str) -> None:
 
 def export(recording: Recording, output: Path, progress: Progress | None = None) -> None:
     """Join the chunks of each stream and merge the streams into output without re-encoding."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise ExportError("FFmpeg was not found on PATH; install it before exporting")
     _check_output(recording, output)
     progress = progress or Progress(disable=True)
     with TemporaryDirectory(prefix="steamrecordingsexporter-") as scratch:
@@ -112,7 +115,7 @@ def export(recording: Recording, output: Path, progress: Progress | None = None)
             _join(progress.track(stream.chunks, description=f"Joining stream {stream.id}"), target)
             joined.append(target)
         task = progress.add_task("Merging the streams", total=None)
-        _merge(joined, output)
+        _merge(ffmpeg, joined, output)
         progress.update(task, total=1, completed=1)
 
 
@@ -155,11 +158,11 @@ def _join(chunks: Iterable[Path], target: Path) -> None:
                 shutil.copyfileobj(source, joined)
 
 
-def _merge(streams: Sequence[Path], output: Path) -> None:
+def _merge(ffmpeg: str, streams: Sequence[Path], output: Path) -> None:
     # Written beside the output and moved over it only once complete, so a failed export keeps
     # the previous file.
     partial = output.with_name(f".{output.stem}.partial{output.suffix}")
-    command = FFmpeg().option("y").option("nostdin")
+    command = FFmpeg(ffmpeg).option("y").option("nostdin")
     # Each stream keeps its own timestamps, so one that lost its first segments stays in sync.
     command.option("copyts")
     for stream in streams:
@@ -175,5 +178,7 @@ def _merge(streams: Sequence[Path], output: Path) -> None:
         if partial.stat().st_size == 0:
             raise ExportError("FFmpeg wrote an empty file")
         partial.replace(output)
+    except FFmpegError as error:
+        raise ExportError(f"FFmpeg could not merge the streams: {error.message}") from error
     finally:
         partial.unlink(missing_ok=True)

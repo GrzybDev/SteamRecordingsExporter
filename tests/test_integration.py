@@ -113,6 +113,7 @@ class ExportIntegrationTests(unittest.TestCase):
         self.output.write_bytes(b"Previous export")
         result = CliRunner().invoke(app, [str(self.clip), str(self.output), "--compact"])
         self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("FFmpeg could not merge the streams", result.output)
         self.assertEqual(self.recording_files(), files)
         self.assertEqual(self.output.read_bytes(), b"Previous export")
         self.assertEqual(

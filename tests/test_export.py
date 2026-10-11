@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from ffmpeg import FFmpegError
+
 from steamrecordingsexporter import export, remove_chunks
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.recording import load_recording
@@ -42,6 +44,7 @@ class ExportTests(unittest.TestCase):
 
     def test_failed_merge_keeps_the_previous_output_and_the_recording(self):
         failures = {
+            "could not merge": {"error": FFmpegError("Invalid data", [])},
             "empty file": {"output": b""},
         }
         before = contents(self.folder)
@@ -73,6 +76,13 @@ class ExportTests(unittest.TestCase):
                     export(load_recording(self.folder), output)
                 self.assertEqual(runs, [])
         self.assertEqual(contents(self.folder), before)
+
+    def test_needs_ffmpeg_on_path(self):
+        with (
+            patch("shutil.which", return_value=None),
+            self.assertRaisesRegex(ExportError, "FFmpeg was not found"),
+        ):
+            export(load_recording(self.folder), self.output)
 
     def test_removes_only_the_chunks_and_the_folders_they_leave_empty(self):
         folder = write_recording(
