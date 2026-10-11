@@ -28,7 +28,7 @@ Requirements
 Installing
 ----------
 
-You can get pre-compiled build for Windows, MacOS and Linux from [Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases), these builds still require FFmpeg on PATH.
+You can get pre-compiled builds for Windows, macOS and Linux from [Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases); the Windows build is code-signed. These builds still require FFmpeg on PATH.
 
 Or install from source or via pip. Example using `pip` (recommended to use a virtualenv or `pipx`/`uv`):
 
