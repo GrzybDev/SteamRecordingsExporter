@@ -33,6 +33,7 @@ class CliTests(unittest.TestCase):
         outputs = {
             None: self.root / "clip.mp4",
             self.root / "videos": self.root / "videos" / "clip.mp4",
+            self.root / "named": self.root / "named.mp4",
             self.root / "named.mkv": self.root / "named.mkv",
         }
         for given, expected in outputs.items():

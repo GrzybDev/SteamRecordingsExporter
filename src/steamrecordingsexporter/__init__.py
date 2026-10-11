@@ -68,7 +68,8 @@ def _output_path(output: Path | None, recording: Recording) -> Path:
     output = (output or Path.cwd()).resolve()
     if output.is_dir():
         return output / f"{recording.folder.name}.mp4"
-    return output
+    # FFmpeg picks the container from the extension.
+    return output if output.suffix else output.with_name(f"{output.name}.mp4")
 
 
 def _gap_warning(stream: Stream) -> str:
