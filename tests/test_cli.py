@@ -6,7 +6,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from steamrecordingsexporter import app
-from support import fake_ffmpeg, write_recording
+from support import contents, fake_ffmpeg, write_recording
 
 
 class CliTests(unittest.TestCase):
@@ -40,6 +40,22 @@ class CliTests(unittest.TestCase):
                 result = self.run_cli(self.folder, *([given] if given else []))
                 self.assertEqual(result.exit_code, 0, result.output)
                 self.assertTrue(expected.is_file(), result.output)
+
+    def test_compact_deletes_the_chunks_and_warns_about_any_left(self):
+        locked = self.folder / "chunk-stream1-00005.m4s"
+        unlink = Path.unlink
+
+        def unlink_unless_locked(path, *args, **kwargs):
+            if path == locked:
+                raise PermissionError("locked")
+            unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", unlink_unless_locked):
+            result = self.run_cli(self.folder, self.root, "--compact")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Warning: Could not delete 1 of 8 chunks: locked", result.output)
+        self.assertIn("Exported with 3 warnings", result.output)
+        self.assertEqual(sorted(contents(self.folder)), ["chunk-stream1-00005.m4s", "session.mpd"])
 
     def test_reports_errors_with_a_failing_exit_code(self):
         (self.root / "empty").mkdir()

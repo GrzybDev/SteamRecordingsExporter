@@ -2,8 +2,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from steamrecordingsexporter import export
+from steamrecordingsexporter import export, remove_chunks
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.recording import load_recording
 from support import contents, fake_ffmpeg, write_recording
@@ -68,6 +69,34 @@ class ExportTests(unittest.TestCase):
                     export(load_recording(self.folder), output)
                 self.assertEqual(runs, [])
         self.assertEqual(contents(self.folder), before)
+
+    def test_removes_only_the_chunks_and_the_folders_they_leave_empty(self):
+        folder = write_recording(
+            self.root / "nested",
+            {"0": [1, 2], "1": [1]},
+            media="media/$RepresentationID$/$Number$.m4s",
+        )
+        (folder / "media" / "1" / "notes.txt").write_text("keep")
+        (folder / "thumbnail.jpg").write_text("keep")
+        self.assertEqual(remove_chunks(load_recording(folder)), {})
+        self.assertEqual(
+            sorted(contents(folder)), ["media/1/notes.txt", "session.mpd", "thumbnail.jpg"]
+        )
+        self.assertFalse((folder / "media" / "0").exists())
+
+    def test_keeps_removing_past_a_chunk_it_cannot_delete(self):
+        locked = self.folder / "chunk-stream0-00001.m4s"
+        unlink = Path.unlink
+
+        def unlink_unless_locked(path, *args, **kwargs):
+            if path == locked:
+                raise PermissionError("locked")
+            unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", unlink_unless_locked):
+            failures = remove_chunks(load_recording(self.folder))
+        self.assertEqual(list(failures), [locked])
+        self.assertEqual(sorted(contents(self.folder)), ["chunk-stream0-00001.m4s", "session.mpd"])
 
 
 if __name__ == "__main__":

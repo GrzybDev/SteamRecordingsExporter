@@ -107,6 +107,18 @@ class ExportIntegrationTests(unittest.TestCase):
         self.assert_exported_streams(self.output)
         self.assertEqual(self.recording_files(), {Path("session.mpd"): manifest})
 
+    def test_ffmpeg_failure_keeps_the_recording_and_the_previous_export(self):
+        (self.clip / "init-stream0.m4s").write_bytes(b"Not an MP4 initialization segment")
+        files = self.recording_files()
+        self.output.write_bytes(b"Previous export")
+        result = CliRunner().invoke(app, [str(self.clip), str(self.output), "--compact"])
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertEqual(self.recording_files(), files)
+        self.assertEqual(self.output.read_bytes(), b"Previous export")
+        self.assertEqual(
+            sorted(path.name for path in self.root.iterdir()), ["recording", "recording.mp4"]
+        )
+
     def test_streams_that_lost_their_first_segment_stay_in_sync(self):
         for lost in (("0",), ("1",), ("0", "1", "2")):
             with self.subTest(lost=lost):

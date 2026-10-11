@@ -1,5 +1,6 @@
 import shutil
 from collections.abc import Iterable, Sequence
+from contextlib import suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Annotated
@@ -35,7 +36,7 @@ def main(
     compact: Annotated[
         bool,
         typer.Option(
-            "--compact", "-c", help="Remove processed chunks immediately to save up on disk space"
+            "--compact", "-c", help="Delete the recording's chunks once the export succeeds."
         ),
     ] = False,
 ) -> None:
@@ -51,7 +52,10 @@ def main(
             TaskProgressColumn(),
             TimeElapsedColumn(),
         ) as progress:
-            export(recording, output, progress, compact)
+            export(recording, output, progress)
+        if compact and (failures := remove_chunks(recording)):
+            warnings.append(_removal_warning(failures, recording))
+            _warn(warnings[-1])
     except (ExportError, OSError) as error:
         typer.echo(f"Error: {error}")
         raise typer.Exit(1) from error
@@ -75,6 +79,11 @@ def _gap_warning(stream: Stream) -> str:
     )
 
 
+def _removal_warning(failures: dict[Path, OSError], recording: Recording) -> str:
+    first = next(iter(failures.values()))
+    return f"Could not delete {len(failures)} of {len(recording.chunks)} chunks: {first}"
+
+
 def _ranges(numbers: Sequence[int]) -> str:
     spans: list[list[int]] = []
     for number in numbers:
@@ -89,9 +98,7 @@ def _warn(message: str) -> None:
     typer.echo(f"Warning: {message}")
 
 
-def export(
-    recording: Recording, output: Path, progress: Progress | None = None, compact: bool = False
-) -> None:
+def export(recording: Recording, output: Path, progress: Progress | None = None) -> None:
     """Join the chunks of each stream and merge the streams into output without re-encoding."""
     _check_output(recording, output)
     progress = progress or Progress(disable=True)
@@ -99,15 +106,34 @@ def export(
         joined = []
         for index, stream in enumerate(recording.streams):
             target = Path(scratch, f"stream-{index}.m4s")
-            _join(
-                progress.track(stream.chunks, description=f"Joining stream {stream.id}"),
-                target,
-                compact,
-            )
+            _join(progress.track(stream.chunks, description=f"Joining stream {stream.id}"), target)
             joined.append(target)
         task = progress.add_task("Merging the streams", total=None)
         _merge(joined, output)
         progress.update(task, total=1, completed=1)
+
+
+def remove_chunks(recording: Recording) -> dict[Path, OSError]:
+    """Delete the chunks of the recording and the folders they leave empty.
+
+    Returns the chunks that could not be deleted, since the export is complete by then.
+    """
+    failures = {}
+    for chunk in recording.chunks:
+        try:
+            chunk.unlink(missing_ok=True)
+        except OSError as error:
+            failures[chunk] = error
+    folders = {
+        parent
+        for chunk in recording.chunks
+        for parent in chunk.parents
+        if parent != recording.folder and parent.is_relative_to(recording.folder)
+    }
+    for folder in sorted(folders, key=lambda folder: len(folder.parts), reverse=True):
+        with suppress(OSError):
+            folder.rmdir()
+    return failures
 
 
 def _check_output(recording: Recording, output: Path) -> None:
@@ -119,13 +145,11 @@ def _check_output(recording: Recording, output: Path) -> None:
         raise ExportError(f"The output would overwrite a file of the recording: {output}")
 
 
-def _join(chunks: Iterable[Path], target: Path, compact: bool) -> None:
+def _join(chunks: Iterable[Path], target: Path) -> None:
     with target.open("wb") as joined:
         for chunk in chunks:
             with chunk.open("rb") as source:
                 shutil.copyfileobj(source, joined)
-            if compact:
-                chunk.unlink()
 
 
 def _merge(streams: Sequence[Path], output: Path) -> None:
