@@ -31,6 +31,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(self.output.read_bytes(), b"MP4")
         self.assertEqual(contents(self.folder), before)
         self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["clip", "clip.mp4"])
+        self.assertFalse(run.inputs[0].parent.exists())
 
 
 if __name__ == "__main__":

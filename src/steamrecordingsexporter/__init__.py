@@ -1,6 +1,7 @@
 import shutil
 from collections.abc import Iterable, Sequence
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated
 
 import typer
@@ -93,20 +94,19 @@ def export(
 ) -> None:
     """Join the chunks of each stream and merge the streams into output without re-encoding."""
     progress = progress or Progress(disable=True)
-    joined = []
-    for stream in recording.streams:
-        target = recording.folder / f"stream-{stream.id}.m4s"
-        _join(
-            progress.track(stream.chunks, description=f"Joining stream {stream.id}"),
-            target,
-            compact,
-        )
-        joined.append(target)
-    task = progress.add_task("Merging the streams", total=None)
-    _merge(joined, output)
-    progress.update(task, total=1, completed=1)
-    for target in joined:
-        target.unlink()
+    with TemporaryDirectory(prefix="steamrecordingsexporter-") as scratch:
+        joined = []
+        for index, stream in enumerate(recording.streams):
+            target = Path(scratch, f"stream-{index}.m4s")
+            _join(
+                progress.track(stream.chunks, description=f"Joining stream {stream.id}"),
+                target,
+                compact,
+            )
+            joined.append(target)
+        task = progress.add_task("Merging the streams", total=None)
+        _merge(joined, output)
+        progress.update(task, total=1, completed=1)
 
 
 def _join(chunks: Iterable[Path], target: Path, compact: bool) -> None:
