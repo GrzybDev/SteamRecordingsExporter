@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 from ffmpeg import FFmpegError
 
-from steamrecordingsexporter import export, remove_chunks
 from steamrecordingsexporter.errors import ExportError
+from steamrecordingsexporter.export import export, remove_chunks
 from steamrecordingsexporter.recording import load_recording
 from support import contents, fake_ffmpeg, write_recording
 

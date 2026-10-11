@@ -11,7 +11,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from steamrecordingsexporter import app, export
+from steamrecordingsexporter.cli import app
+from steamrecordingsexporter.export import export
 from steamrecordingsexporter.recording import load_recording
 
 FFMPEG = shutil.which("ffmpeg")

@@ -6,7 +6,7 @@ from unittest.mock import patch
 from ffmpeg import FFmpegError
 from typer.testing import CliRunner
 
-from steamrecordingsexporter import app
+from steamrecordingsexporter.cli import app
 from support import contents, fake_ffmpeg, write_recording
 
 
