@@ -59,7 +59,7 @@ def main(
             warnings.append(_removal_warning(failures, recording))
             _warn(warnings[-1])
     except (ExportError, OSError) as error:
-        typer.echo(f"Error: {error}", err=True)
+        typer.secho(f"Error: {error}", fg="red", err=True)
         raise typer.Exit(1) from error
     count = len(warnings)
     summary = f" with {count} warning{'' if count == 1 else 's'}" if count else ""
@@ -98,7 +98,7 @@ def _ranges(numbers: Sequence[int]) -> str:
 
 
 def _warn(message: str) -> None:
-    typer.echo(f"Warning: {message}", err=True)
+    typer.secho(f"Warning: {message}", fg="yellow", err=True)
 
 
 def export(recording: Recording, output: Path, progress: Progress | None = None) -> None:
