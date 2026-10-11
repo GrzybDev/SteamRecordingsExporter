@@ -2,8 +2,8 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Union
 
-from steamrecordingsexporter.helpers import get_filename, get_filename_pattern
 from steamrecordingsexporter.representation import Representation
+from steamrecordingsexporter.template import Template
 
 
 _REMOTE_TEMPLATE_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
@@ -82,13 +82,17 @@ class MPD:
                         f"startNumber must be non-negative for representation ID: {rep_id}"
                     )
 
-                get_filename(initialization, RepresentationID=rep_id)
-                get_filename_pattern(media, RepresentationID=rep_id)
+                initialization_template = Template(initialization)
+                media_template = Template(media)
+                if initialization_template.uses_number:
+                    raise ValueError("Initialization template must not use $Number$")
+                if not media_template.uses_number:
+                    raise ValueError("Media template must use $Number$")
                 reps.append(
                     Representation(
                         id=rep_id,
-                        initialization=initialization,
-                        media=media,
+                        initialization=initialization_template,
+                        media=media_template,
                         start_number=start_number,
                     )
                 )

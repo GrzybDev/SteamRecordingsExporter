@@ -40,7 +40,7 @@ class ManifestTests(unittest.TestCase):
     def test_local_template_paths_containing_a_colon_are_accepted(self):
         data = manifest("<Period><AdaptationSet>" + representation(
             template='<SegmentTemplate initialization="init.m4s" media="t1:$Number$.m4s"/>') + "</AdaptationSet></Period>")
-        self.assertEqual(MPD(data).get_representations()[0].media, "t1:$Number$.m4s")
+        self.assertEqual(MPD(data).get_representations()[0].media.text, "t1:$Number$.m4s")
 
     def test_representation_ids_remain_strings(self):
         data = manifest("<Period><AdaptationSet>" + representation("01") + representation("audio") + "</AdaptationSet></Period>")
@@ -57,8 +57,8 @@ class ManifestTests(unittest.TestCase):
             </AdaptationSet>
         </Period>''')
         rep = MPD(data).get_representations()[0]
-        self.assertEqual(rep.initialization, "init-$RepresentationID$.m4s")
-        self.assertEqual(rep.media, "adaptation-$Number%05d$.m4s")
+        self.assertEqual(rep.initialization.text, "init-$RepresentationID$.m4s")
+        self.assertEqual(rep.media.text, "adaptation-$Number%05d$.m4s")
         self.assertEqual(rep.start_number, 4)
 
     def test_duplicate_ids_are_rejected_across_adaptations(self):
@@ -106,12 +106,12 @@ class ManifestTests(unittest.TestCase):
 
     def test_time_addressing_is_explicitly_rejected(self):
         data = manifest("<Period><AdaptationSet>" + representation(template='<SegmentTemplate initialization="init.m4s" media="$Time$.m4s"/>') + "</AdaptationSet></Period>")
-        with self.assertRaisesRegex(ValueError, "Unsupported DASH template identifier: Time"):
+        with self.assertRaisesRegex(ValueError, r"unsupported identifier \$Time\$"):
             MPD(data).get_representations()
 
     def test_constant_media_template_is_rejected(self):
         data = manifest("<Period><AdaptationSet>" + representation(template='<SegmentTemplate initialization="init.m4s" media="chunk.m4s"/>') + "</AdaptationSet></Period>")
-        with self.assertRaisesRegex(ValueError, "must contain"):
+        with self.assertRaisesRegex(ValueError, "must use"):
             MPD(data).get_representations()
 
 

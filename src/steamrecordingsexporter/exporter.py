@@ -9,7 +9,6 @@ from typing import Optional
 from ffmpeg import FFmpeg
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, track
 
-from steamrecordingsexporter.helpers import get_filename, get_filename_pattern
 from steamrecordingsexporter.mpd import MPD
 from steamrecordingsexporter.representation import Representation
 
@@ -41,10 +40,10 @@ class Exporter:
         return path
 
     def _initialization_path(self, rep: Representation) -> Path:
-        return self._chunk_path(get_filename(rep.initialization, RepresentationID=rep.id))
+        return self._chunk_path(rep.initialization.format(rep.id))
 
     def _media_path(self, rep: Representation, number: int) -> Path:
-        return self._chunk_path(get_filename(rep.media, RepresentationID=rep.id, Number=number))
+        return self._chunk_path(rep.media.format(rep.id, number))
 
     def _list_files(self) -> list[str]:
         """Return POSIX paths of all files below the input directory."""
@@ -59,22 +58,11 @@ class Exporter:
     ) -> tuple[int, ...]:
         # Reject escaping templates even when no media segment matches.
         self._media_path(rep, rep.start_number)
-        pattern = get_filename_pattern(rep.media, RepresentationID=rep.id)
-        numbers = []
-        for filename in filenames:
-            match = pattern.fullmatch(filename)
-            if match is None:
-                continue
-            number = int(match.group("Number"))
-            if number < rep.start_number:
-                continue
-            # Skip non-canonical spellings, e.g. extra zero padding.
-            if filename != get_filename(rep.media, RepresentationID=rep.id, Number=number):
-                continue
-            self._chunk_path(filename)
-            numbers.append(number)
-
-        numbers.sort()
+        numbers = sorted(
+            number for number in rep.media.numbers(rep.id, filenames) if number >= rep.start_number
+        )
+        for number in numbers:
+            self._media_path(rep, number)
         if not numbers:
             raise ValueError(f"No media segments found for representation '{rep.id}'.")
         if numbers != list(range(rep.start_number, rep.start_number + len(numbers))):

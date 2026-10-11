@@ -24,16 +24,16 @@ class ExporterTests(unittest.TestCase):
         patch("steamrecordingsexporter.exporter.track", side_effect=lambda items, **kwargs: items).start()
 
     def recording(self, streams=(('7', (1, 2)),), initialization="init-$RepresentationID$.m4s", media="chunk-$RepresentationID$-$Number%05d$.m4s"):
-        from steamrecordingsexporter.helpers import get_filename
+        from steamrecordingsexporter.template import Template
 
         representations = []
         for rep_id, numbers in streams:
             representations.append(f'<Representation id="{rep_id}"/>')
-            init = self.input_dir / get_filename(initialization, RepresentationID=rep_id)
+            init = self.input_dir / Template(initialization).format(rep_id)
             init.parent.mkdir(parents=True, exist_ok=True)
             init.write_bytes(f"INIT:{rep_id};".encode())
             for number in numbers:
-                chunk = self.input_dir / get_filename(media, RepresentationID=rep_id, Number=number)
+                chunk = self.input_dir / Template(media).format(rep_id, number)
                 chunk.parent.mkdir(parents=True, exist_ok=True)
                 chunk.write_bytes(f"{rep_id}:{number};".encode())
         self.session = self.input_dir / "session.mpd"
