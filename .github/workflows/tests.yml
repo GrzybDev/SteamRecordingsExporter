@@ -9,6 +9,21 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Check the code
+        run: uv run --locked ruff check
+
+      - name: Check the formatting
+        run: uv run --locked ruff format --check
+
   test:
     name: Test
     runs-on: ubuntu-latest

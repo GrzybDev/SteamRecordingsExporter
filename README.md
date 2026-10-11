@@ -96,11 +96,12 @@ Notes
 Development
 -----------
 
-Install the package and run the standard-library test suite:
+Run the standard-library test suite and the linter with [uv](https://docs.astral.sh/uv/):
 
 ```sh
-pip install .
-python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
+uv run ruff check
+uv run ruff format --check
 ```
 
 Integration tests generate a short DASH recording and verify the exported video and both audio tracks using FFmpeg and ffprobe. Both binaries must be on PATH; otherwise these tests are skipped.
