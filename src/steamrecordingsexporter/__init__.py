@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 from ffmpeg import FFmpeg
+from rich.console import Console
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from steamrecordingsexporter.errors import ExportError
@@ -51,13 +52,14 @@ def main(
             BarColumn(),
             TaskProgressColumn(),
             TimeElapsedColumn(),
+            console=Console(stderr=True),
         ) as progress:
             export(recording, output, progress)
         if compact and (failures := remove_chunks(recording)):
             warnings.append(_removal_warning(failures, recording))
             _warn(warnings[-1])
     except (ExportError, OSError) as error:
-        typer.echo(f"Error: {error}")
+        typer.echo(f"Error: {error}", err=True)
         raise typer.Exit(1) from error
     count = len(warnings)
     summary = f" with {count} warning{'' if count == 1 else 's'}" if count else ""
@@ -96,7 +98,7 @@ def _ranges(numbers: Sequence[int]) -> str:
 
 
 def _warn(message: str) -> None:
-    typer.echo(f"Warning: {message}")
+    typer.echo(f"Warning: {message}", err=True)
 
 
 def export(recording: Recording, output: Path, progress: Progress | None = None) -> None:
