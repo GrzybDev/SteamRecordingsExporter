@@ -164,6 +164,7 @@ def _merge(streams: Sequence[Path], output: Path) -> None:
     command.output(
         partial,
         codec="copy",
+        map=[str(index) for index in range(len(streams))],
         avoid_negative_ts="make_zero",
     )
     try:

@@ -31,6 +31,10 @@ class ExportTests(unittest.TestCase):
                 for rep_id in ("0", "1")
             ],
         )
+        maps = [
+            run.arguments[i + 1] for i, argument in enumerate(run.arguments) if argument == "-map"
+        ]
+        self.assertEqual(maps, ["0", "1"])
         self.assertEqual(self.output.read_bytes(), b"MP4")
         self.assertEqual(contents(self.folder), before)
         self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["clip", "clip.mp4"])

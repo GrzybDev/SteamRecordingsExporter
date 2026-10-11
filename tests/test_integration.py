@@ -85,13 +85,13 @@ class ExportIntegrationTests(unittest.TestCase):
     def assert_exported_streams(self, output):
         streams = probe(output, "-count_packets", "-show_streams")["streams"]
         self.assertEqual(
-            Counter(stream["codec_name"] for stream in streams), {"mpeg4": 1, "aac": 1}
+            Counter(stream["codec_name"] for stream in streams), {"mpeg4": 1, "aac": 2}
         )
         for stream in streams:
             self.assertGreaterEqual(int(stream["nb_read_packets"]), 8)
             self.assertAlmostEqual(float(stream["duration"]), 2, delta=0.5)
 
-    def test_exports_the_video_and_its_audio(self):
+    def test_exports_the_video_and_both_audio_tracks(self):
         files = self.recording_files()
         export(load_recording(self.clip), self.output)
         self.assert_exported_streams(self.output)
@@ -136,7 +136,7 @@ class ExportIntegrationTests(unittest.TestCase):
 
                 export(recording, output)
                 exported = first_packet_times(output)
-                for index in range(1, len(exported)):
+                for index in range(1, len(starts)):
                     self.assertAlmostEqual(
                         exported[index] - exported[0], starts[index] - starts[0], delta=0.02
                     )
