@@ -119,14 +119,23 @@ def _join(chunks: Iterable[Path], target: Path, compact: bool) -> None:
 
 
 def _merge(streams: Sequence[Path], output: Path) -> None:
+    # Written beside the output and moved over it only once complete, so a failed export keeps
+    # the previous file.
+    partial = output.with_name(f".{output.stem}.partial{output.suffix}")
     command = FFmpeg().option("y").option("nostdin")
     # Each stream keeps its own timestamps, so one that lost its first segments stays in sync.
     command.option("copyts")
     for stream in streams:
         command.input(stream)
     command.output(
-        output,
+        partial,
         codec="copy",
         avoid_negative_ts="make_zero",
     )
-    command.execute()
+    try:
+        command.execute()
+        if partial.stat().st_size == 0:
+            raise ExportError("FFmpeg wrote an empty file")
+        partial.replace(output)
+    finally:
+        partial.unlink(missing_ok=True)

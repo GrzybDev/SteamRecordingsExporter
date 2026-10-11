@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from steamrecordingsexporter import export
+from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.recording import load_recording
 from support import contents, fake_ffmpeg, write_recording
 
@@ -32,6 +33,23 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(contents(self.folder), before)
         self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["clip", "clip.mp4"])
         self.assertFalse(run.inputs[0].parent.exists())
+
+    def test_failed_merge_keeps_the_previous_output_and_the_recording(self):
+        failures = {
+            "empty file": {"output": b""},
+        }
+        before = contents(self.folder)
+        for message, failure in failures.items():
+            with self.subTest(message=message):
+                self.output.write_bytes(b"EARLIER")
+                with fake_ffmpeg(**failure) as runs, self.assertRaisesRegex(ExportError, message):
+                    export(load_recording(self.folder), self.output)
+                self.assertEqual(self.output.read_bytes(), b"EARLIER")
+                self.assertEqual(contents(self.folder), before)
+                self.assertEqual(
+                    sorted(path.name for path in self.root.iterdir()), ["clip", "clip.mp4"]
+                )
+                self.assertFalse(runs[0].inputs[0].parent.exists())
 
 
 if __name__ == "__main__":

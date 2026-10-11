@@ -57,7 +57,7 @@ class FFmpegRun:
 
 
 @contextmanager
-def fake_ffmpeg() -> Iterator[list[FFmpegRun]]:
+def fake_ffmpeg(output: bytes = b"MP4") -> Iterator[list[FFmpegRun]]:
     """Stand in for FFmpeg, recording what each run reads and writing its output."""
     runs = []
 
@@ -67,7 +67,7 @@ def fake_ffmpeg() -> Iterator[list[FFmpegRun]]:
             Path(arguments[i + 1]) for i, argument in enumerate(arguments) if argument == "-i"
         ]
         runs.append(FFmpegRun(arguments, inputs, [path.read_bytes() for path in inputs]))
-        Path(arguments[-1]).write_bytes(b"MP4")
+        Path(arguments[-1]).write_bytes(output)
 
     with patch.object(FFmpeg, "execute", autospec=True, side_effect=execute):
         yield runs
