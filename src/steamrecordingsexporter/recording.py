@@ -53,7 +53,9 @@ def _stream(folder: Path, representation: Representation, names: set[str]) -> St
     numbers = sorted(n for n in representation.media.numbers(rep_id, names) if n >= start)
     if not numbers:
         raise ExportError(f"Stream {rep_id!r} has no media segments")
-    missing = sorted(set(range(start, numbers[-1] + 1)).difference(numbers))
+    # Steam declares the length of the recording, which also reveals segments lost at its end.
+    last = max(numbers[-1], start + (representation.segment_count or 0) - 1)
+    missing = sorted(set(range(start, last + 1)).difference(numbers))
     return Stream(
         rep_id,
         initialization,

@@ -36,6 +36,17 @@ class RecordingTests(unittest.TestCase):
         self.assertEqual([stream.missing for stream in recording.streams], [(7, 9, 10), (5, 6)])
         self.assertEqual(len(recording.streams[0].segments), 4)
 
+    def test_counts_segments_missing_up_to_the_last_one_the_manifest_declares(self):
+        write_recording(
+            self.folder,
+            {"0": [1, 2, 3], "1": [1, 2, 3, 4, 5], "2": [1, 2, 3, 4, 5, 6]},
+            duration="PT14.5S",
+            segment_duration=3,
+        )
+        recording = load_recording(self.folder)
+        self.assertEqual([stream.missing for stream in recording.streams], [(4, 5), (), ()])
+        self.assertEqual(len(recording.streams[2].segments), 6)
+
     def test_ignores_files_that_are_not_segments_of_the_stream(self):
         write_recording(self.folder, {"0": [1, 2]})
         for name in (

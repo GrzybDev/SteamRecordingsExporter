@@ -26,6 +26,7 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual([representation.id for representation in representations], ["0", "1"])
         for representation in representations:
             self.assertEqual(representation.start_number, 1155)
+            self.assertEqual(representation.segment_count, 146)
             self.assertEqual(
                 representation.initialization.format(representation.id),
                 f"init-stream{representation.id}.m4s",
@@ -48,6 +49,27 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(representation.initialization.text, "init-$RepresentationID$.m4s")
         self.assertEqual(representation.media.text, "set-$Number%05d$.m4s")
         self.assertEqual(representation.start_number, 4)
+
+    def test_counts_the_segments_that_fill_the_declared_duration(self):
+        cases = {
+            (
+                'mediaPresentationDuration="PT1H52M42.109S"',
+                'timescale="1000000" duration="3000000"',
+            ): 2255,
+            ('mediaPresentationDuration="PT6S"', 'duration="3"'): 2,
+            ('mediaPresentationDuration="P1DT0.5S"', 'timescale="1000" duration="86400000"'): 2,
+            ("", 'duration="3"'): None,
+            ('mediaPresentationDuration="PT6S"', ""): None,
+        }
+        for (declared, timing), count in cases.items():
+            with self.subTest(declared=declared, timing=timing):
+                data = manifest(
+                    '<Period><AdaptationSet><Representation id="0"><SegmentTemplate'
+                    f' initialization="init.m4s" media="$Number$.m4s" {timing}/>'
+                    "</Representation></AdaptationSet></Period>",
+                    declared,
+                )
+                self.assertEqual(parse_manifest(data)[0].segment_count, count)
 
     def test_rejects_manifests_it_cannot_export(self):
         cases = {
@@ -75,6 +97,14 @@ class ManifestTests(unittest.TestCase):
             single(
                 '<SegmentTemplate initialization="i.m4s" media="$Number$.m4s" startNumber="-1"/>'
             ): "invalid startNumber",
+            manifest(
+                '<Period><SegmentTemplate initialization="i" media="$Number$" duration="0"/>'
+                '<AdaptationSet><Representation id="0"/></AdaptationSet></Period>',
+                'mediaPresentationDuration="PT6S"',
+            ): "invalid duration",
+            manifest("<Period/>", 'mediaPresentationDuration="7 minutes"'): (
+                "Invalid mediaPresentationDuration"
+            ),
         }
         for data, message in cases.items():
             with self.subTest(message=message), self.assertRaisesRegex(ExportError, message):
