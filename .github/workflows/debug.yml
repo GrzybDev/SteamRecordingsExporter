@@ -5,50 +5,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            osname: Linux
-          - os: macos-latest
-            osname: macOS
-          - os: windows-latest
-            osname: Windows
-
-    name: Build for ${{ matrix.osname }}
-    permissions: write-all
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.14
-
-      - name: Install dependencies
-        run: pip install .
-
-      - name: Build executable
-        uses: Nuitka/Nuitka-Action@main
-        with:
-          mode: standalone
-          script-name: src/steamrecordingsexporter
-          output-dir: build
-          output-file: ${{ github.event.repository.name }}_${{ matrix.osname }}_Debug
-          company-name: ${{ github.repository_owner }}
-          product-name: ${{ github.event.repository.name }} (${{ github.workflow }} - ${{ github.sha }})
-          file-version: 0.0.0.0
-          product-version: 0.0.0.0
-          copyright: "Copyright (c) 2026 ${{ github.repository_owner }}"
-          include-package: rich._unicode_data
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Debug_${{ matrix.osname }}
-          path: build/steamrecordingsexporter.dist
-          include-hidden-files: true
+    uses: GrzybDev/actions/.github/workflows/python-app.yml@v1
+    with:
+      include-package: rich._unicode_data
