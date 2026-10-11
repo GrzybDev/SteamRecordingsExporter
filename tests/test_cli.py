@@ -1,7 +1,6 @@
 import logging
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +9,7 @@ from rich.text import Text
 from typer.testing import CliRunner
 
 from steamrecordingsexporter import app
+from steamrecordingsexporter.errors import ExportError
 
 
 class CLITests(unittest.TestCase):
@@ -43,8 +43,8 @@ class CLITests(unittest.TestCase):
                 self.assertIn('--compact', Text.from_ansi(result.output).plain)
 
     def test_expected_failures_have_nonzero_exit_and_useful_message(self):
-        errors = [FileNotFoundError('session.mpd missing'), ValueError('Invalid media template'),
-                  ET.ParseError('Invalid XML'), FFmpegError('Invalid media', ['ffmpeg'])]
+        errors = [FileNotFoundError('session.mpd missing'), ExportError('Invalid media template'),
+                  FFmpegError('Invalid media', ['ffmpeg'])]
         for error in errors:
             with self.subTest(error=error), patch('steamrecordingsexporter.Exporter.run', side_effect=error):
                 result = self.runner.invoke(app, [str(self.root)])

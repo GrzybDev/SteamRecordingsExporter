@@ -9,8 +9,8 @@ from typing import Optional
 from ffmpeg import FFmpeg
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, track
 
-from steamrecordingsexporter.mpd import MPD
-from steamrecordingsexporter.representation import Representation
+from steamrecordingsexporter.errors import ExportError
+from steamrecordingsexporter.manifest import Representation, parse_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class Exporter:
     def _chunk_path(self, filename: str) -> Path:
         path = (self.input_dir / filename).resolve()
         if Path(filename).is_absolute() or not path.is_relative_to(self.input_dir):
-            raise ValueError(f"Chunk path must stay inside the input directory: {filename}")
+            raise ExportError(f"Chunk path must stay inside the input directory: {filename}")
         return path
 
     def _initialization_path(self, rep: Representation) -> Path:
@@ -64,7 +64,7 @@ class Exporter:
         for number in numbers:
             self._media_path(rep, number)
         if not numbers:
-            raise ValueError(f"No media segments found for representation '{rep.id}'.")
+            raise ExportError(f"No media segments found for representation '{rep.id}'.")
         if numbers != list(range(rep.start_number, rep.start_number + len(numbers))):
             logger.warning(
                 "Missing segments for representation '%s'; recovering the available segments. "
@@ -76,7 +76,7 @@ class Exporter:
     def get_session_data(self, session_file: Path) -> list[Representation]:
         if not session_file.is_file():
             raise FileNotFoundError(f"Manifest file not found: {session_file}")
-        representations = MPD(session_file.read_bytes()).get_representations()
+        representations = parse_manifest(session_file.read_bytes())
         filenames = self._list_files()
 
         discovered = []
@@ -93,7 +93,7 @@ class Exporter:
 
     def _chunk_paths(self, rep: Representation) -> list[Path]:
         if not rep.segment_numbers:
-            raise ValueError(f"No segment data for representation '{rep.id}'.")
+            raise ExportError(f"No segment data for representation '{rep.id}'.")
         return [self._initialization_path(rep)] + [
             self._media_path(rep, number) for number in rep.segment_numbers
         ]
@@ -123,11 +123,11 @@ class Exporter:
             if source.resolve() == self.output_file or (
                 self.output_file.exists() and self.output_file.samefile(source)
             ):
-                raise ValueError(f"Output file would overwrite a recording source: {source}")
+                raise ExportError(f"Output file would overwrite a recording source: {source}")
 
     def export(self, stream_files: list[Path]) -> None:
         if not stream_files:
-            raise ValueError("No streams to export.")
+            raise ExportError("No streams to export.")
         # Windows requires the temporary file to be closed before FFmpeg opens it.
         with NamedTemporaryFile(
             dir=self.output_file.parent,
@@ -158,7 +158,7 @@ class Exporter:
                     },
                 ).execute()
                 if temporary_output.stat().st_size == 0:
-                    raise ValueError("FFmpeg did not produce a non-empty output file.")
+                    raise ExportError("FFmpeg did not produce a non-empty output file.")
                 temporary_output.replace(self.output_file)
                 progress.update(task, advance=1)
         finally:

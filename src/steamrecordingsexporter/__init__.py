@@ -1,11 +1,11 @@
 import logging
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 from ffmpeg import FFmpegError
 
+from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.exporter import Exporter
 
 app = typer.Typer()
@@ -45,7 +45,7 @@ def main(
     logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.WARNING)
     try:
         output = Exporter(input_dir, output_file, compact).run()
-    except (OSError, ValueError, ET.ParseError, FFmpegError) as error:
+    except (ExportError, OSError, FFmpegError) as error:
         typer.echo(f"Error: {error}", err=True)
         raise typer.Exit(code=1) from error
     typer.echo(f"Video exported successfully! (Saved as: {output})")

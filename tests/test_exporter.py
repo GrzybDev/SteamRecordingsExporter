@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from ffmpeg import FFmpeg
 
+from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.exporter import Exporter
 
 
@@ -95,13 +96,13 @@ class ExporterTests(unittest.TestCase):
                 self.exporter.get_session_data(self.session)
 
     def test_init_without_media_is_an_error(self):
-        with self.assertRaisesRegex(ValueError, "No media segments"):
+        with self.assertRaisesRegex(ExportError, "No media segments"):
             self.recording((('7', ()),))
 
     def test_chunk_path_cannot_escape_input_directory(self):
         outside = self.root / 'init-7.m4s'
         outside.write_bytes(b"untouched")
-        with self.assertRaisesRegex(ValueError, "inside the input directory"):
+        with self.assertRaisesRegex(ExportError, "inside the input directory"):
             self.recording(initialization='../init-$RepresentationID$.m4s')
         self.assertTrue(outside.is_file())
 
@@ -125,7 +126,7 @@ class ExporterTests(unittest.TestCase):
             with self.subTest(source=source):
                 exporter = Exporter(self.input_dir, source, compact=True)
                 with patch('shutil.which', return_value='ffmpeg'):
-                    with self.assertRaisesRegex(ValueError, 'overwrite a recording source'):
+                    with self.assertRaisesRegex(ExportError, 'overwrite a recording source'):
                         exporter.run()
                 self.assertTrue(source.is_file())
 
@@ -139,7 +140,7 @@ class ExporterTests(unittest.TestCase):
         except OSError as error:
             self.skipTest(f'Hardlinks unavailable: {error}')
         with patch('shutil.which', return_value='ffmpeg'):
-            with self.assertRaisesRegex(ValueError, 'overwrite a recording source'):
+            with self.assertRaisesRegex(ExportError, 'overwrite a recording source'):
                 self.exporter.run()
         self.assertEqual(source.read_bytes(), b'7:1;')
 
@@ -214,7 +215,7 @@ class ExporterTests(unittest.TestCase):
         self.output.write_bytes(b'EXISTING')
         before = {path.name: path.read_bytes() for path in self.input_dir.iterdir()}
         with patch('shutil.which', return_value='ffmpeg'), patch.object(FFmpeg, 'execute'), redirect_stdout(io.StringIO()):
-            with self.assertRaisesRegex(ValueError, 'non-empty output'):
+            with self.assertRaisesRegex(ExportError, 'non-empty output'):
                 self.exporter.run()
         self.assertEqual(self.output.read_bytes(), b'EXISTING')
         self.assertEqual({path.name: path.read_bytes() for path in self.input_dir.iterdir()}, before)
