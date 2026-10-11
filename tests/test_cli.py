@@ -1,83 +1,80 @@
-import logging
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from ffmpeg import FFmpegError
-from rich.text import Text
 from typer.testing import CliRunner
 
-from steamrecordingsexporter import app
-from steamrecordingsexporter.errors import ExportError
+from steamrecordingsexporter.cli import app
+from support import contents, fake_ffmpeg, write_recording
 
 
-class CLITests(unittest.TestCase):
+class CliTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
-        self.runner = CliRunner()
-        self._isolate_logging()
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name).resolve()
+        self.folder = write_recording(self.root / "clip", {"0": [1, 3], "1": [1, 2, 4, 5]})
 
-    def _isolate_logging(self):
-        """Keep the logging configuration the CLI installs from leaking into other tests."""
-        root_logger = logging.getLogger()
-        handlers, level = root_logger.handlers[:], root_logger.level
+    def run_cli(self, *arguments, **ffmpeg):
+        with fake_ffmpeg(**ffmpeg):
+            return CliRunner().invoke(app, [str(argument) for argument in arguments])
 
-        def restore():
-            root_logger.handlers[:] = handlers
-            root_logger.setLevel(level)
+    def test_exports_and_counts_the_warnings(self):
+        result = self.run_cli(self.folder, self.root)
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Warning: Stream '0' is missing 1 of 3 segments (2)", result.output)
+        self.assertIn("Warning: Stream '1' is missing 1 of 5 segments (3)", result.output)
+        self.assertIn(f"Exported with 2 warnings: {self.root / 'clip.mp4'}", result.output)
+        self.assertEqual((self.root / "clip.mp4").read_bytes(), b"MP4")
 
-        self.addCleanup(restore)
-
-    def test_help(self):
-        for color in (False, True):
-            with self.subTest(color=color), patch(
-                'typer.rich_utils.FORCE_TERMINAL', color
-            ), patch.dict('os.environ', {'TERM': 'xterm-256color', 'NO_COLOR': ''}):
-                result = self.runner.invoke(app, ['--help'], color=color)
+    def test_names_the_output_after_the_recording_unless_given_a_file(self):
+        (self.root / "videos").mkdir()
+        outputs = {
+            None: self.root / "clip.mp4",
+            self.root / "videos": self.root / "videos" / "clip.mp4",
+            self.root / "named": self.root / "named.mp4",
+            self.root / "named.mkv": self.root / "named.mkv",
+        }
+        for given, expected in outputs.items():
+            with self.subTest(given=given), patch("pathlib.Path.cwd", return_value=self.root):
+                result = self.run_cli(self.folder, *([given] if given else []))
                 self.assertEqual(result.exit_code, 0, result.output)
-                if color:
-                    self.assertIn('\x1b[', result.output)
-                self.assertIn('--compact', Text.from_ansi(result.output).plain)
+                self.assertTrue(expected.is_file(), result.output)
 
-    def test_expected_failures_have_nonzero_exit_and_useful_message(self):
-        errors = [FileNotFoundError('session.mpd missing'), ExportError('Invalid media template'),
-                  FFmpegError('Invalid media', ['ffmpeg'])]
-        for error in errors:
-            with self.subTest(error=error), patch('steamrecordingsexporter.Exporter.run', side_effect=error):
-                result = self.runner.invoke(app, [str(self.root)])
+    def test_compact_deletes_the_chunks_and_warns_about_any_left(self):
+        locked = self.folder / "chunk-stream1-00005.m4s"
+        unlink = Path.unlink
+
+        def unlink_unless_locked(path, *args, **kwargs):
+            if path == locked:
+                raise PermissionError("locked")
+            unlink(path, *args, **kwargs)
+
+        with patch.object(Path, "unlink", unlink_unless_locked):
+            result = self.run_cli(self.folder, self.root, "--compact")
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Warning: Could not delete 1 of 8 chunks: locked", result.output)
+        self.assertIn("Exported with 3 warnings", result.output)
+        self.assertEqual(sorted(contents(self.folder)), ["chunk-stream1-00005.m4s", "session.mpd"])
+
+    def test_reports_errors_with_a_failing_exit_code(self):
+        (self.root / "empty").mkdir()
+        cases = {
+            "Error: session.mpd was not found": ([self.root / "empty"], {}),
+            "Error: FFmpeg could not merge the streams: Invalid data": (
+                [self.folder, self.root],
+                {"error": FFmpegError("Invalid data", [])},
+            ),
+        }
+        for message, (arguments, ffmpeg) in cases.items():
+            with self.subTest(message=message):
+                result = self.run_cli(*arguments, **ffmpeg)
                 self.assertEqual(result.exit_code, 1, result.output)
-                self.assertIn(f'Error: {error}', result.output)
-                self.assertNotIn('successfully', result.output)
-
-    def test_exporter_warnings_are_labelled_for_the_user(self):
-        def warn_then_export():
-            logging.getLogger('steamrecordingsexporter.exporter').warning('Recording may contain gaps')
-            return self.root / 'clip.mp4'
-
-        with patch('steamrecordingsexporter.Exporter.run', side_effect=warn_then_export):
-            result = self.runner.invoke(app, [str(self.root)])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn('WARNING: Recording may contain gaps', result.output)
-
-    def test_compact_flag_reaches_the_exporter(self):
-        for flag, expected in (([], False), (['--compact'], True), (['-c'], True)):
-            with self.subTest(flag=flag):
-                with patch('steamrecordingsexporter.Exporter.__init__', return_value=None) as init, \
-                        patch('steamrecordingsexporter.Exporter.run', return_value=self.root / 'clip.mp4'):
-                    result = self.runner.invoke(app, [str(self.root), *flag])
-                self.assertEqual(result.exit_code, 0, result.output)
-                init.assert_called_once_with(self.root, None, expected)
-
-    def test_success_reports_saved_path(self):
-        output = self.root / 'clip.mp4'
-        with patch('steamrecordingsexporter.Exporter.run', return_value=output):
-            result = self.runner.invoke(app, [str(self.root)])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn(str(output), result.output)
+                self.assertIn(message, result.output)
+                self.assertNotIn("Exported", result.output)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

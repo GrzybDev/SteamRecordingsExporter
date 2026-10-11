@@ -25,4 +25,4 @@ dependencies = [
 package = true
 
 [project.scripts]
-steamrecordingsexporter = "steamrecordingsexporter:app"
+steamrecordingsexporter = "steamrecordingsexporter.cli:app"
