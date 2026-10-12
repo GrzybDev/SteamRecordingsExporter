@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: GrzybDev/actions/.github/workflows/python-checks.yml@v1
+    with:
+      apt-packages: ffmpeg
+
+  build:
+    needs: checks
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    uses: GrzybDev/actions/.github/workflows/python-app.yml@v1
+    with:
+      include-package: rich._unicode_data
