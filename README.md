@@ -8,6 +8,7 @@ Table of Contents
 - [Requirements](#requirements)
 - [Installing](#installing)
 - [Usage](#usage)
+- [Development](#development)
 - [Credits](#credits)
 
 Features
@@ -15,19 +16,19 @@ Features
 
 - Join DASH `m4s` initialization and media segments into per-representation stream files.
 - Merge joined streams into a single MP4 using `ffmpeg` (stream copy — no re-encoding).
-- Optionally remove processed chunk files to save disk space (`--compact`).
-- Robust parsing of `session.mpd` to detect representation templates and segment filenames.
+- Optionally remove processed chunk files after a successful export (`--compact`).
+- Parse local, numbered Steam DASH recordings, recover available segments despite gaps, and preserve all audio tracks.
 
 Requirements
 ------------
 
-- Python 3.9+
+- Python 3.14+
 - System `ffmpeg` binary available on PATH.
 
 Installing
 ----------
 
-You can get pre-compiled build for Windows, MacOS and Linux from [Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases), these builds
+You can get pre-compiled builds for Windows, macOS and Linux from [Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases); the Windows build is code-signed. These builds still require FFmpeg on PATH.
 
 Or install from source or via pip. Example using `pip` (recommended to use a virtualenv or `pipx`/`uv`):
 
@@ -69,7 +70,7 @@ steamrecordingsexporter path/to/clip_folder
 # Export and write to a specific file
 steamrecordingsexporter path/to/clip_folder output.mp4
 
-# Export and remove chunks as they are processed
+# Export and remove processed chunks after success
 steamrecordingsexporter path/to/clip_folder --compact
 ```
 
@@ -78,14 +79,32 @@ CLI arguments and options
 | Parameter     | Description                                                                 | Default / notes                                           |
 |--------------:|:----------------------------------------------------------------------------:|:----------------------------------------------------------|
 | `input_dir`   | Path to clip folder containing `session.mpd` and segment (`.m4s`) files      | required                                                  |
-| `output_file` | Output file path or directory where the exported media will be saved        | if directory given, saved as `<input_dir.name>.mp4`; if omitted saved as `<input_dir.name>.mp4` in CWD |
-| `--compact`   | Remove processed chunk files immediately to save disk space                 | `False`                                                   |
+| `output_file` | Output file path or directory where the exported media will be saved        | if directory given, saved as `<input_dir.name>.mp4`; if omitted saved as `<input_dir.name>.mp4` in CWD; if the name has no extension, `.mp4` is appended |
+| `--compact`   | Remove processed chunk files after a successful export                 | `False`                                                   |
 
 Notes
 -----
 
 - The tool reads `session.mpd`, extracts representation `initialization` and `media` templates, resolves segment filenames and concatenates them in order.
 - Merging is performed with `ffmpeg` via the Python `python-ffmpeg` wrapper and uses stream copy (`-c copy`) to avoid re-encoding.
+
+- Missing segments are reported per stream with how many of them are missing and which, including the ones lost at the end of a stream, which the manifest's `mediaPresentationDuration` reveals. The available segments from `startNumber` onward are still joined in numeric order, so the export has gaps where segments are missing, and its final line counts the warnings.
+- Temporary streams are isolated from the recording files and are removed after either success or failure. An existing output is replaced only after FFmpeg succeeds and produces a non-empty file.
+- `--compact` deletes only consumed initialization and media chunks after the output has been saved, together with any directory they emptied. It preserves `session.mpd`, unrelated files, and directories that still hold something. A chunk that cannot be removed is reported as a warning instead of failing the export. Allow enough disk space for temporary streams and the output during export.
+- Supported manifests have a single `Period`, local paths in `SegmentTemplate`, and `$RepresentationID$` / `$Number$` identifiers (including `$Number%05d$` and escaped `$$`). Time-based templates, `SegmentTemplate` paths pointing at a remote location, nontrivial `BaseURL` paths, and multiple periods are rejected with an error.
+
+Development
+-----------
+
+Run the standard-library test suite and the linter with [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv run python -m unittest discover -s tests -v
+uv run ruff check
+uv run ruff format --check
+```
+
+Integration tests generate a short DASH recording and verify the exported video and both audio tracks using FFmpeg and ffprobe. Both binaries must be on PATH; otherwise these tests are skipped.
 
 Credits
 -------
