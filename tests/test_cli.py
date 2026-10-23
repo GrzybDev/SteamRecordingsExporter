@@ -18,15 +18,26 @@ def run_cli(*arguments: Path | str) -> Result:
 
 @pytest.fixture
 def folder(tmp_path: Path) -> Path:
-    """Write a recording whose streams each miss one segment."""
-    return write_recording(tmp_path / "clip", {"0": [1, 3], "1": [1, 2, 4, 5]})
+    """Write a five-segment recording whose streams lost segments inside and at the end."""
+    return write_recording(
+        tmp_path / "clip",
+        {"0": [1, 3], "1": [1, 2, 4, 5]},
+        duration="PT15S",
+        segment_duration=3,
+    )
 
 
 def test_exports_and_counts_the_warnings(tmp_path: Path, folder: Path, ffmpeg: FakeFFmpeg) -> None:
     result = run_cli(folder, tmp_path)
     assert result.exit_code == 0, result.output
-    assert "Warning: Stream '0' is missing 1 of 3 segments (2)" in result.output
-    assert "Warning: Stream '1' is missing 1 of 5 segments (3)" in result.output
+    assert (
+        "Warning: Stream '0' is missing 3 of 5 segments (2, 4-5), which the export leaves out"
+        in result.output
+    )
+    assert (
+        "Warning: Stream '1' is missing 1 of 5 segments (3), which the export leaves out"
+        in result.output
+    )
     assert f"Exported with 2 warnings: {tmp_path / 'clip.mp4'}" in result.output
     assert (tmp_path / "clip.mp4").read_bytes() == b"MP4"
 

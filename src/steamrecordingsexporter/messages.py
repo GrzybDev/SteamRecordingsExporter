@@ -13,7 +13,7 @@ EXPORTED_WITH_WARNINGS = "Exported with {count} warnings: {output}"
 
 WARNING = "Warning: {message}"
 MISSING_SEGMENTS = (
-    "Stream {id!r} is missing {missing} of {total} segments ({ranges}), so the video will have gaps"
+    "Stream {id!r} is missing {missing} of {total} segments ({ranges}), which the export leaves out"
 )
 CHUNKS_LEFT = "Could not delete {failed} of {total} chunks: {error}"
 
