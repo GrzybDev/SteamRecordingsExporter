@@ -90,3 +90,13 @@ def test_reports_errors_with_a_failing_exit_code(tmp_path: Path) -> None:
     assert result.exit_code == 1, result.output
     assert "Error: session.mpd was not found" in result.output
     assert "Exported" not in result.output
+
+
+def test_writes_only_the_result_to_stdout(tmp_path: Path, folder: Path, ffmpeg: FakeFFmpeg) -> None:
+    exported = run_cli(folder, tmp_path)
+    assert exported.stdout == f"Exported with 2 warnings: {tmp_path / 'clip.mp4'}\n"
+    assert "Warning: Stream '0' is missing" in exported.stderr
+    (tmp_path / "empty").mkdir()
+    failed = run_cli(tmp_path / "empty")
+    assert failed.stdout == ""
+    assert "Error: session.mpd was not found" in failed.stderr
