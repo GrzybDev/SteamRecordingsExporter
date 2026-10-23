@@ -46,7 +46,9 @@ def export(recording: Recording, output: Path, progress: ExportProgress = _SILEN
     if ffmpeg is None:
         raise ExportError(messages.FFMPEG_MISSING)
     _check_output(recording, output)
-    with TemporaryDirectory(prefix="steamrecordingsexporter-") as scratch:
+    # Beside the output, on the drive that has to hold the export anyway, since the joined
+    # streams are as large as the recording.
+    with TemporaryDirectory(prefix=".steamrecordingsexporter-", dir=output.parent) as scratch:
         joined = []
         for index, stream in enumerate(recording.streams):
             target = Path(scratch, f"stream-{index}.m4s")

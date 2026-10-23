@@ -16,7 +16,7 @@ def folder(tmp_path: Path) -> Path:
     return write_recording(tmp_path / "clip", {"0": [1, 2], "1": [1, 2]})
 
 
-def test_merges_the_joined_streams_into_the_output(
+def test_merges_the_streams_joined_beside_the_output(
     tmp_path: Path, folder: Path, ffmpeg: FakeFFmpeg
 ) -> None:
     before = contents(folder)
@@ -27,6 +27,7 @@ def test_merges_the_joined_streams_into_the_output(
         f"chunk-stream{rep_id}-00002.m4s;".encode()
         for rep_id in ("0", "1")
     ]
+    assert [path.parent.parent for path in run.inputs] == [tmp_path, tmp_path]
     assert (tmp_path / "clip.mp4").read_bytes() == b"MP4"
     assert contents(folder) == before
     assert sorted(path.name for path in tmp_path.iterdir()) == ["clip", "clip.mp4"]

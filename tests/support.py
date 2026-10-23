@@ -12,9 +12,10 @@ MEDIA = "chunk-stream$RepresentationID$-$Number%05d$.m4s"
 
 @dataclass
 class FFmpegRun:
-    """The arguments of one FFmpeg run and the bytes of its inputs when it ran."""
+    """The arguments of one FFmpeg run, its inputs and their bytes when it ran."""
 
     arguments: Sequence[str]
+    inputs: list[Path]
     input_contents: list[bytes]
 
 
@@ -35,7 +36,7 @@ class FakeFFmpeg:
             options: The subprocess.run options, of which check and capture_output take effect.
         """
         inputs = [Path(arguments[i + 1]) for i, value in enumerate(arguments) if value == "-i"]
-        self.runs.append(FFmpegRun(arguments, [path.read_bytes() for path in inputs]))
+        self.runs.append(FFmpegRun(arguments, inputs, [path.read_bytes() for path in inputs]))
         Path(arguments[-1]).write_bytes(self.output)
         stderr = self.stderr if options.get("capture_output") else None
         result = subprocess.CompletedProcess(arguments, self.returncode, "", stderr)
