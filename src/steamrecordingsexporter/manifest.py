@@ -24,6 +24,7 @@ class Representation:
     Attributes:
         segment_count: How many segments fill the declared duration, or None when the
             manifest declares no duration.
+        audio: Whether the manifest marks the stream as audio.
     """
 
     id: str
@@ -31,6 +32,7 @@ class Representation:
     media: Template
     start_number: int
     segment_count: int | None
+    audio: bool
 
 
 def parse_manifest(data: bytes) -> list[Representation]:
@@ -96,7 +98,14 @@ def _representation(levels: tuple[ET.Element, ...], seconds: Fraction | None) ->
         raise ExportError(
             messages.REPRESENTATION_PROBLEM.format(id=representation_id, problem=error)
         ) from error
-    return Representation(representation_id, initialization, media, start_number, segment_count)
+    # DASH marks audio on the set or the representation, by content type or MIME type.
+    audio = any(
+        level.get("contentType") == "audio" or level.get("mimeType", "").startswith("audio/")
+        for level in levels
+    )
+    return Representation(
+        representation_id, initialization, media, start_number, segment_count, audio
+    )
 
 
 def _template(attributes: dict[str, str], name: str) -> Template:

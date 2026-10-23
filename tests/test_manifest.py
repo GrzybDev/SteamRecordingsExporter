@@ -36,6 +36,7 @@ def single(template: str = DEFAULT_TEMPLATE, representation_id: str = "0") -> by
 def test_reads_a_steam_manifest() -> None:
     representations = parse_manifest(STEAM_MANIFEST.read_bytes())
     assert [representation.id for representation in representations] == ["0", "1"]
+    assert [representation.audio for representation in representations] == [False, True]
     for representation in representations:
         assert representation.start_number == 1155
         assert representation.segment_count == 146
@@ -60,6 +61,29 @@ def test_segment_template_is_inherited_down_to_the_representation() -> None:
     assert representation.initialization.format("a") == "init-a.m4s"
     assert representation.media.format("a", 7) == "set-00007.m4s"
     assert representation.start_number == 4
+
+
+@pytest.mark.parametrize(
+    ("adaptation_set", "representation", "audio"),
+    [
+        ('contentType="audio"', "", True),
+        ('mimeType="audio/mp4"', "", True),
+        ("", 'mimeType="audio/mp4"', True),
+        ('contentType="video"', 'mimeType="video/mp4"', False),
+        ("", "", False),
+    ],
+)
+def test_finds_audio_by_content_or_mime_type_on_either_level(
+    adaptation_set: str, representation: str, audio: bool
+) -> None:
+    [found] = parse_manifest(
+        manifest(
+            f"<Period><AdaptationSet {adaptation_set}>"
+            f'<Representation id="0" {representation}>{DEFAULT_TEMPLATE}</Representation>'
+            "</AdaptationSet></Period>"
+        )
+    )
+    assert found.audio is audio
 
 
 @pytest.mark.parametrize(

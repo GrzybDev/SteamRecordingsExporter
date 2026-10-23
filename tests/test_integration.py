@@ -140,6 +140,23 @@ def test_ffmpeg_failure_keeps_the_recording_and_the_previous_export(
     assert sorted(path.name for path in tmp_path.iterdir()) == ["recording", "recording.mp4"]
 
 
+@pytest.mark.parametrize("offset", ["0.5", "-0.25"])
+def test_audio_offset_moves_both_audio_tracks_against_the_video(
+    tmp_path: Path, clip: Path, offset: str
+) -> None:
+    export(load_recording(clip), tmp_path / "plain.mp4")
+    plain = first_packet_times(tmp_path / "plain.mp4")
+    output = tmp_path / "shifted.mp4"
+    result = CliRunner().invoke(app, [str(clip), str(output), "--audio-offset", offset])
+    assert result.exit_code == 0, result.output
+    assert_exported_streams(output)
+    shifted = first_packet_times(output)
+    for audio in (1, 2):
+        assert shifted[audio] - shifted[0] == pytest.approx(
+            plain[audio] - plain[0] + float(offset), abs=0.02
+        )
+
+
 @pytest.mark.parametrize("lost", [("0",), ("1",), ("0", "1", "2")])
 def test_streams_that_lost_their_first_segment_stay_in_sync(
     tmp_path: Path, clip: Path, lost: tuple[str, ...]

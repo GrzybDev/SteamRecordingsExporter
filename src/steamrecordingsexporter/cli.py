@@ -66,6 +66,10 @@ def main(
         bool,
         typer.Option("--compact", "-c", help=messages.COMPACT_HELP),
     ] = False,
+    audio_offset: Annotated[
+        float,
+        typer.Option("--audio-offset", metavar="SECONDS", help=messages.AUDIO_OFFSET_HELP),
+    ] = 0.0,
 ) -> None:
     """Export the recording to a video file, reporting warnings and errors.
 
@@ -73,6 +77,7 @@ def main(
         input_dir: The recording folder.
         output_file: The output file, or the folder to save it in.
         compact: Whether to delete the recording's chunks after a successful export.
+        audio_offset: Seconds to delay the audio by against the video.
     """
     try:
         recording = load_recording(input_dir)
@@ -87,7 +92,7 @@ def main(
             TimeElapsedColumn(),
             console=Console(stderr=True),
         ) as progress:
-            export(recording, output, _ProgressBars(progress))
+            export(recording, output, _ProgressBars(progress), audio_offset=audio_offset)
         if compact and (failures := remove_chunks(recording)):
             warnings.append(_removal_warning(failures, recording))
             _warn(warnings[-1])

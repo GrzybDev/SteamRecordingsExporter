@@ -31,21 +31,32 @@ class ExportProgress:
 _SILENT = ExportProgress()
 
 
-def export(recording: Recording, output: Path, progress: ExportProgress = _SILENT) -> None:
+def export(
+    recording: Recording,
+    output: Path,
+    progress: ExportProgress = _SILENT,
+    *,
+    audio_offset: float = 0.0,
+) -> None:
     """Join the chunks of each stream and merge the streams into output without re-encoding.
 
     Args:
         recording: The recording to export.
         output: The file to write.
         progress: Receives how far the export has got.
+        audio_offset: Seconds to move every audio stream by: later when positive, earlier
+            when negative.
 
     Raises:
-        ExportError: If FFmpeg is missing, the output is unsafe or the merge fails.
+        ExportError: If FFmpeg is missing, the output is unsafe, there is no audio stream to
+            offset or the merge fails.
     """
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         raise ExportError(messages.FFMPEG_MISSING)
     _check_output(recording, output)
+    if audio_offset and not any(stream.audio for stream in recording.streams):
+        raise ExportError(messages.NO_AUDIO_STREAM)
     # Beside the output, on the drive that has to hold the export anyway, since the joined
     # streams are as large as the recording.
     with TemporaryDirectory(prefix=".steamrecordingsexporter-", dir=output.parent) as scratch:
@@ -53,7 +64,7 @@ def export(recording: Recording, output: Path, progress: ExportProgress = _SILEN
         for index, stream in enumerate(recording.streams):
             target = Path(scratch, f"stream-{index}.m4s")
             _join(stream, target, progress)
-            joined.append(target)
+            joined.append((target, audio_offset if stream.audio else 0.0))
         progress.merging()
         _merge(ffmpeg, joined, output)
         progress.merged()
@@ -103,13 +114,16 @@ def _join(stream: Stream, target: Path, progress: ExportProgress) -> None:
             progress.joined(stream, count)
 
 
-def _merge(ffmpeg: str, streams: Sequence[Path], output: Path) -> None:
+def _merge(ffmpeg: str, streams: Sequence[tuple[Path, float]], output: Path) -> None:
     # Written beside the output and moved over it only once complete, so a failed export keeps
     # the previous file.
     partial = output.with_name(f".{output.stem}.partial{output.suffix}")
     # Each stream keeps its own timestamps, so one that lost its first segments stays in sync.
     arguments = [ffmpeg, "-y", "-nostdin", "-copyts"]
-    for stream in streams:
+    for stream, offset in streams:
+        # Shifting the input's timestamps moves a stream without re-encoding it.
+        if offset:
+            arguments += ["-itsoffset", str(offset)]
         arguments += ["-i", str(stream)]
     arguments += ["-codec", "copy"]
     for index in range(len(streams)):

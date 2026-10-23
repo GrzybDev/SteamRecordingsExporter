@@ -111,6 +111,15 @@ def test_needs_ffmpeg_on_path(
         export(load_recording(folder), tmp_path / "clip.mp4")
 
 
+def test_audio_offset_needs_an_audio_stream(
+    tmp_path: Path, folder: Path, ffmpeg: FakeFFmpeg
+) -> None:
+    with pytest.raises(ExportError, match="no audio stream to offset"):
+        export(load_recording(folder), tmp_path / "clip.mp4", audio_offset=0.5)
+    assert ffmpeg.runs == []
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["clip"]
+
+
 def test_removes_only_the_chunks_and_the_folders_they_leave_empty(tmp_path: Path) -> None:
     folder = write_recording(
         tmp_path / "nested",

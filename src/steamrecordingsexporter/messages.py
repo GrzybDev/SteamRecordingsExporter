@@ -4,6 +4,9 @@ COMMAND_HELP = "Export a Steam recording to a single video file."
 INPUT_HELP = "Recording folder holding session.mpd and the chunks it lists."
 OUTPUT_HELP = "Output file, or the folder to save it in as <recording folder name>.mp4."
 COMPACT_HELP = "Delete the recording's chunks once the export succeeds."
+AUDIO_OFFSET_HELP = (
+    "Seconds to delay the audio by against the video; a negative value plays it earlier."
+)
 
 JOINING = "Joining stream {id}"
 MERGING = "Merging the streams"
@@ -19,6 +22,7 @@ CHUNKS_LEFT = "Could not delete {failed} of {total} chunks: {error}"
 
 ERROR = "Error: {error}"
 FFMPEG_MISSING = "FFmpeg was not found on PATH; install it before exporting"
+NO_AUDIO_STREAM = "The recording has no audio stream to offset"
 OUTPUT_FOLDER_MISSING = "The output folder does not exist: {folder}"
 OUTPUT_IN_RECORDING = "The output would overwrite a file of the recording: {output}"
 EMPTY_OUTPUT = "FFmpeg wrote an empty file"

@@ -17,6 +17,7 @@ class Stream:
     initialization: Path
     segments: tuple[Path, ...]
     missing: tuple[int, ...]
+    audio: bool
 
     @property
     def chunks(self) -> tuple[Path, ...]:
@@ -77,6 +78,7 @@ def _stream(folder: Path, representation: Representation, names: set[str]) -> St
         initialization,
         tuple(_chunk(folder, representation.media.format(rep_id, n)) for n in numbers),
         tuple(missing),
+        representation.audio,
     )
 
 
