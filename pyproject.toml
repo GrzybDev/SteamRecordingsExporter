@@ -29,6 +29,7 @@ steamrecordingsexporter = "steamrecordingsexporter.cli:app"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
 
@@ -38,3 +39,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers"]

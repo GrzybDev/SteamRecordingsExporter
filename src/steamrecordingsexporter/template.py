@@ -25,7 +25,6 @@ class Template:
     """A SegmentTemplate path with the $RepresentationID$, $Number$ and $$ identifiers of DASH."""
 
     def __init__(self, text: str) -> None:
-        self.text = text
         self._parts = tuple(_parse(text))
 
     @property

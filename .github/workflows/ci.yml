@@ -13,6 +13,7 @@ jobs:
     uses: GrzybDev/actions/.github/workflows/python-checks.yml@v1
     with:
       apt-packages: ffmpeg
+      test-command: pytest
 
   build:
     needs: checks
