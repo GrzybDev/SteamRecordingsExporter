@@ -28,6 +28,7 @@ steamrecordingsexporter = "steamrecordingsexporter.cli:app"
 
 [dependency-groups]
 dev = [
+    "mypy>=2.4.0",
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
@@ -42,3 +43,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers"]
+
+[tool.mypy]
+files = ["src", "tests"]
+strict = true
