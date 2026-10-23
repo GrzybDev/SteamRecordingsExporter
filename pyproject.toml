@@ -38,7 +38,7 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "D"]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "PTH", "RUF", "D"]
 # Modules, packages and types say what they hold through their names; a type whose name
 # does not gets a docstring by hand.
 ignore = ["D100", "D101", "D104"]
