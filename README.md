@@ -1,52 +1,53 @@
 # SteamRecordingsExporter
 
-Tool to recover semi-corrupted Steam recordings and export Steam recordings without the Steam client.
+A command-line tool that exports Steam game recordings to single video files without the Steam client, including
+recordings that lost some of their segments.
 
 Table of Contents
 -----------------
+
+- [Legal notes](#legal-notes)
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installing](#installing)
 - [Usage](#usage)
+- [File formats](#file-formats)
 - [Development](#development)
 - [Credits](#credits)
+
+Legal notes
+-----------
+
+SteamRecordingsExporter is not affiliated with or endorsed by Valve Corporation. Steam is a trademark of Valve
+Corporation. The tool includes no Steam files; it reads only the recordings that Steam saved on your computer.
 
 Features
 --------
 
-- Join DASH `m4s` initialization and media segments into per-representation stream files.
-- Merge joined streams into a single MP4 using `ffmpeg` (stream copy — no re-encoding).
-- Optionally remove processed chunk files after a successful export (`--compact`).
-- Parse local, numbered Steam DASH recordings, recover available segments despite gaps, and preserve all audio tracks.
+- Export a Steam recording folder to one video file with every video and audio track, without re-encoding
+- Export recordings with missing segments and report which segments of each stream are missing, including the
+  ones lost at the end
+- Keep a stream that lost its first segments in sync with the others
+- Shift the audio against the video by a set number of seconds (`--audio-offset`)
+- Leave the recording untouched and replace an existing output only after a successful export
+- Delete the recording's chunks after a successful export (`--compact`)
+- Stop with an error that names the reason when a manifest uses something the tool cannot export
 
 Requirements
 ------------
 
-- Python 3.14+
-- System `ffmpeg` binary available on PATH.
+- [FFmpeg](https://ffmpeg.org) on PATH
+- Python 3.14+ when installing from source
 
 Installing
 ----------
 
-You can get pre-compiled builds for Windows, macOS and Linux from [Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases); the Windows build is code-signed. These builds still require FFmpeg on PATH.
-
-Or install from source or via pip. Example using `pip` (recommended to use a virtualenv or `pipx`/`uv`):
-
-```sh
-pip install .
-# or, using pipx for an isolated CLI install:
-pipx install .
-# or, using uv
-uv tool install .
-```
-
-If you prefer installing directly from a remote Git repository, replace the source with your repository URL:
+Portable builds for Windows, macOS and Linux are on the
+[Releases](https://github.com/GrzybDev/SteamRecordingsExporter/releases) page; the Windows build is code-signed.
+You can also install the tool from the repository with uv (or pipx):
 
 ```sh
-# using pipx
-pipx install git+https://github.com/GrzybDev/SteamRecordingsExporter.git
-# using uv
-uv tool install git+https://github.com/GrzybDev/SteamRecordingsExporter.git
+uv tool install git+https://github.com/GrzybDev/SteamRecordingsExporter
 ```
 
 Usage
@@ -54,63 +55,93 @@ Usage
 
 ```sh
 steamrecordingsexporter --help
+python -m steamrecordingsexporter --help
 ```
-
-The tool expects an input directory containing DASH segment files and a `session.mpd` file describing representations.
-
-- By default the tool will join representation segments, then merge them with `ffmpeg` into a single MP4 file using stream copy.
-- If `output_file` is omitted the resulting file will be named `<clip-folder-name>.mp4` and saved to the current working directory.
-
-Example:
 
 ```sh
-# Export a clip folder to default output name
-steamrecordingsexporter path/to/clip_folder
-
-# Export and write to a specific file
-steamrecordingsexporter path/to/clip_folder output.mp4
-
-# Export and remove processed chunks after success
-steamrecordingsexporter path/to/clip_folder --compact
+steamrecordingsexporter path/to/recording [path/to/output.mp4] [--compact] [--audio-offset SECONDS]
 ```
 
-CLI arguments and options
+`path/to/recording` is a recording folder: the folder holding a `session.mpd` and the chunks it lists. Steam saves
+each background recording in its own recording folder, `video/bg_<app id>_<date>_<time>`, inside the folder set in
+its game recording settings.
 
-| Parameter     | Description                                                                 | Default / notes                                           |
-|--------------:|:----------------------------------------------------------------------------:|:----------------------------------------------------------|
-| `input_dir`   | Path to clip folder containing `session.mpd` and segment (`.m4s`) files      | required                                                  |
-| `output_file` | Output file path or directory where the exported media will be saved        | if directory given, saved as `<input_dir.name>.mp4`; if omitted saved as `<input_dir.name>.mp4` in CWD; if the name has no extension, `.mp4` is appended |
-| `--compact`   | Remove processed chunk files after a successful export                 | `False`                                                   |
+The tool joins the chunks of each stream and merges the streams into one file with FFmpeg, without re-encoding.
+Without an output, it saves `<recording folder name>.mp4` in the current folder; given an existing folder, it saves
+the same name there; given any other name without an extension, it appends `.mp4`. FFmpeg picks the container from the
+extension.
 
-Notes
------
+The joined streams go to a temporary `.steamrecordingsexporter-*` folder beside the output and are deleted afterwards,
+so the output's drive needs free space for about twice the size of the recording. An existing output is replaced only
+once FFmpeg has written a complete file, and the recording itself is never changed.
 
-- The tool reads `session.mpd`, extracts representation `initialization` and `media` templates, resolves segment filenames and concatenates them in order.
-- Merging is performed with `ffmpeg` via the Python `python-ffmpeg` wrapper and uses stream copy (`-c copy`) to avoid re-encoding.
+When segments are missing, the tool warns which segments of each stream are missing and exports the rest; the
+declared length of the recording also reveals segments lost at the end. The video has nothing in place of the
+missing segments. The last line names the output and counts the warnings.
 
-- Missing segments are reported per stream with how many of them are missing and which, including the ones lost at the end of a stream, which the manifest's `mediaPresentationDuration` reveals. The available segments from `startNumber` onward are still joined in numeric order, so the export has gaps where segments are missing, and its final line counts the warnings.
-- Temporary streams are isolated from the recording files and are removed after either success or failure. An existing output is replaced only after FFmpeg succeeds and produces a non-empty file.
-- `--compact` deletes only consumed initialization and media chunks after the output has been saved, together with any directory they emptied. It preserves `session.mpd`, unrelated files, and directories that still hold something. A chunk that cannot be removed is reported as a warning instead of failing the export. Allow enough disk space for temporary streams and the output during export.
-- Supported manifests have a single `Period`, local paths in `SegmentTemplate`, and `$RepresentationID$` / `$Number$` identifiers (including `$Number%05d$` and escaped `$$`). Time-based templates, `SegmentTemplate` paths pointing at a remote location, nontrivial `BaseURL` paths, and multiple periods are rejected with an error.
+`--compact` deletes the chunks only after the export succeeds, together with any folder they leave empty. It keeps
+`session.mpd` and every other file. A chunk that cannot be deleted is reported as a warning.
+
+`--audio-offset` delays every audio stream by the given number of seconds, or plays it earlier with a negative
+value, to bring sound that runs behind or ahead of the picture back in sync. Only the timestamps move, so nothing
+is re-encoded. The manifest marks which streams are audio.
+
+The export stops with an error and exit code 1 when the recording folder has no `session.mpd`, the manifest is one the
+tool cannot export (see [File formats](#file-formats)), a stream has no initialization chunk or no segments, FFmpeg is
+missing or fails, the output folder does not exist, the output would overwrite a file of the recording, or an audio
+offset is given for a recording without an audio stream. A representation without an ID or without segment templates
+stops the whole export. Invalid arguments, such as a recording folder that does not exist, exit with code 2. Progress,
+warnings and errors go to stderr; the last line goes to stdout.
+
+|                   Option | Description                                                             | Default                                             |
+|-------------------------:|-------------------------------------------------------------------------|-----------------------------------------------------|
+|      `path/to/recording` | Recording folder holding `session.mpd` and the chunks it lists          | required                                            |
+|     `path/to/output.mp4` | Output file, or the folder to save it in                                | `<recording folder name>.mp4` in the current folder |
+|        `-c`, `--compact` | Delete the recording's chunks once the export succeeds                  | off                                                 |
+| `--audio-offset SECONDS` | Delay the audio by this many seconds; a negative value plays it earlier | `0`                                                 |
+
+Export a recording into an existing `videos` folder and delete its chunks afterwards (progress bars left out):
+
+```sh
+steamrecordingsexporter path/to/Recordings/video/bg_1234567_20260412_201500 videos --compact
+```
+
+```text
+Warning: Stream '0' is missing 2 of 1246 segments (731-732), which the export leaves out
+Warning: Stream '1' is missing 2 of 1246 segments (731-732), which the export leaves out
+Exported with 2 warnings: /home/user/videos/bg_1234567_20260412_201500.mp4
+```
+
+File formats
+------------
+
+The tool reads a Steam recording folder: an MPEG-DASH manifest, `session.mpd`, and the fragmented MP4 chunks it
+lists. [Steam recording folder](docs/steam-recording.md) describes the folder, the manifest fields the tool uses and
+what it rejects. The output holds every stream of the recording, copied as recorded.
 
 Development
 -----------
 
-Run the standard-library test suite and the linter with [uv](https://docs.astral.sh/uv/):
-
 ```sh
-uv run python -m unittest discover -s tests -v
+uv sync
+uv run pytest
 uv run ruff check
 uv run ruff format --check
+uv run mypy
 ```
 
-Integration tests generate a short DASH recording and verify the exported video and both audio tracks using FFmpeg and ffprobe. Both binaries must be on PATH; otherwise these tests are skipped.
+The integration tests record a short DASH recording with FFmpeg and check the export with ffprobe; they are skipped
+when either is missing from PATH.
 
 Credits
 -------
 
 - [GrzybDev](https://grzyb.dev)
 
-Special thanks:
-- Authors and maintainers of FFmpeg and the MPEG-DASH specification for the underlying technologies.
-- Valve for creating such an amazing feature!
+Thanks to:
+
+- [FFmpeg](https://ffmpeg.org) (for merging the streams)
+
+Special thanks to:
+
+- Valve (for making Steam's game recording)
