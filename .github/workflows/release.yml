@@ -25,6 +25,7 @@ jobs:
     with:
       apt-packages: ffmpeg
       test-command: pytest
+      runners: '["ubuntu-latest", "windows-latest"]'
 
   version:
     name: Bump Version
