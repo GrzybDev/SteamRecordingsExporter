@@ -13,6 +13,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from steamrecordingsexporter import messages
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.export import ExportProgress, export, remove_chunks
 from steamrecordingsexporter.recording import Recording, Stream, load_recording
@@ -32,18 +33,18 @@ class _ProgressBars(ExportProgress):
     def joined(self, stream: Stream, chunks: int) -> None:
         if stream.id not in self._bars:
             self._bars[stream.id] = self._progress.add_task(
-                f"Joining stream {stream.id}", total=len(stream.chunks)
+                messages.JOINING.format(id=stream.id), total=len(stream.chunks)
             )
         self._progress.update(self._bars[stream.id], completed=chunks)
 
     def merging(self) -> None:
-        self._merge = self._progress.add_task("Merging the streams", total=None)
+        self._merge = self._progress.add_task(messages.MERGING, total=None)
 
     def merged(self) -> None:
         self._progress.update(self._merge, total=1, completed=1)
 
 
-@app.command(help="Export a Steam recording to a single video file.")
+@app.command(help=messages.COMMAND_HELP)
 def main(
     input_dir: Annotated[
         Path,
@@ -51,21 +52,19 @@ def main(
             exists=True,
             file_okay=False,
             readable=True,
-            help="Recording folder holding session.mpd and the chunks it lists.",
+            help=messages.INPUT_HELP,
         ),
     ],
     output_file: Annotated[
         Path | None,
         typer.Argument(
             writable=True,
-            help="Output file, or the folder to save it in as <recording folder name>.mp4.",
+            help=messages.OUTPUT_HELP,
         ),
     ] = None,
     compact: Annotated[
         bool,
-        typer.Option(
-            "--compact", "-c", help="Delete the recording's chunks once the export succeeds."
-        ),
+        typer.Option("--compact", "-c", help=messages.COMPACT_HELP),
     ] = False,
 ) -> None:
     """Export the recording to a video file, reporting warnings and errors.
@@ -93,11 +92,15 @@ def main(
             warnings.append(_removal_warning(failures, recording))
             _warn(warnings[-1])
     except (ExportError, OSError) as error:
-        typer.secho(f"Error: {error}", fg="red", err=True)
+        typer.secho(messages.ERROR.format(error=error), fg="red", err=True)
         raise typer.Exit(1) from error
-    count = len(warnings)
-    summary = f" with {count} warning{'' if count == 1 else 's'}" if count else ""
-    typer.echo(f"Exported{summary}: {output}")
+    if not warnings:
+        summary = messages.EXPORTED
+    elif len(warnings) == 1:
+        summary = messages.EXPORTED_WITH_WARNING
+    else:
+        summary = messages.EXPORTED_WITH_WARNINGS
+    typer.echo(summary.format(count=len(warnings), output=output))
 
 
 def _output_path(output: Path | None, recording: Recording) -> Path:
@@ -111,15 +114,16 @@ def _output_path(output: Path | None, recording: Recording) -> Path:
 
 def _gap_warning(stream: Stream) -> str:
     total = len(stream.segments) + len(stream.missing)
-    return (
-        f"Stream {stream.id!r} is missing {len(stream.missing)} of {total} segments "
-        f"({_ranges(stream.missing)}), so the video will have gaps"
+    return messages.MISSING_SEGMENTS.format(
+        id=stream.id, missing=len(stream.missing), total=total, ranges=_ranges(stream.missing)
     )
 
 
 def _removal_warning(failures: dict[Path, OSError], recording: Recording) -> str:
     first = next(iter(failures.values()))
-    return f"Could not delete {len(failures)} of {len(recording.chunks)} chunks: {first}"
+    return messages.CHUNKS_LEFT.format(
+        failed=len(failures), total=len(recording.chunks), error=first
+    )
 
 
 def _ranges(numbers: Sequence[int]) -> str:
@@ -134,4 +138,4 @@ def _ranges(numbers: Sequence[int]) -> str:
 
 
 def _warn(message: str) -> None:
-    typer.secho(f"Warning: {message}", fg="yellow", err=True)
+    typer.secho(messages.WARNING.format(message=message), fg="yellow", err=True)

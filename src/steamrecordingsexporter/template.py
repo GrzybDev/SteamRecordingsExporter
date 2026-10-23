@@ -2,6 +2,8 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
+from steamrecordingsexporter import messages
+
 _NUMBER = re.compile(r"Number(?:%0([1-9][0-9]*)d)?")
 
 
@@ -78,7 +80,7 @@ def _parse(text: str) -> Iterator[str | _Identifier]:
     """Split the template into literal text and identifiers."""
     pieces = text.split("$")
     if len(pieces) % 2 == 0:
-        raise ValueError(f"unbalanced $ in {text!r}")
+        raise ValueError(messages.UNBALANCED_DOLLAR.format(text=text))
     for index, piece in enumerate(pieces):
         if index % 2 == 0:
             if piece:
@@ -90,4 +92,4 @@ def _parse(text: str) -> Iterator[str | _Identifier]:
         elif match := _NUMBER.fullmatch(piece):
             yield _Identifier("Number", int(match[1] or 1))
         else:
-            raise ValueError(f"unsupported identifier ${piece}$ in {text!r}")
+            raise ValueError(messages.UNSUPPORTED_IDENTIFIER.format(piece=piece, text=text))

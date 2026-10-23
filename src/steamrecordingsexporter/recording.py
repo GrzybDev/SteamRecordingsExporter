@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from steamrecordingsexporter import messages
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.manifest import Representation, parse_manifest
 
@@ -52,7 +53,7 @@ def load_recording(folder: Path) -> Recording:
     folder = folder.resolve()
     manifest = folder / MANIFEST
     if not manifest.is_file():
-        raise ExportError(f"{MANIFEST} was not found in {folder}")
+        raise ExportError(messages.MANIFEST_MISSING.format(manifest=MANIFEST, folder=folder))
     representations = parse_manifest(manifest.read_bytes())
     names = _file_names(folder)
     return Recording(folder, tuple(_stream(folder, rep, names) for rep in representations))
@@ -62,10 +63,12 @@ def _stream(folder: Path, representation: Representation, names: set[str]) -> St
     rep_id, start = representation.id, representation.start_number
     initialization = _chunk(folder, representation.initialization.format(rep_id))
     if not initialization.is_file():
-        raise ExportError(f"Stream {rep_id!r} has no initialization chunk {initialization.name}")
+        raise ExportError(
+            messages.INITIALIZATION_MISSING.format(id=rep_id, name=initialization.name)
+        )
     numbers = sorted(n for n in representation.media.numbers(rep_id, names) if n >= start)
     if not numbers:
-        raise ExportError(f"Stream {rep_id!r} has no media segments")
+        raise ExportError(messages.SEGMENTS_MISSING.format(id=rep_id))
     # Steam declares the length of the recording, which also reveals segments lost at its end.
     last = max(numbers[-1], start + (representation.segment_count or 0) - 1)
     missing = sorted(set(range(start, last + 1)).difference(numbers))
@@ -81,7 +84,7 @@ def _chunk(folder: Path, name: str) -> Path:
     """Return the path of a chunk, refusing one outside the recording folder."""
     path = Path(os.path.normpath(folder / name))
     if not path.is_relative_to(folder):
-        raise ExportError(f"Chunk {name} is outside the recording folder")
+        raise ExportError(messages.CHUNK_OUTSIDE.format(name=name))
     return path
 
 

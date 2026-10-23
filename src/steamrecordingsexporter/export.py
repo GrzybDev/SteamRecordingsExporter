@@ -5,6 +5,7 @@ from contextlib import suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from steamrecordingsexporter import messages
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.recording import Recording, Stream
 
@@ -43,7 +44,7 @@ def export(recording: Recording, output: Path, progress: ExportProgress = _SILEN
     """
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
-        raise ExportError("FFmpeg was not found on PATH; install it before exporting")
+        raise ExportError(messages.FFMPEG_MISSING)
     _check_output(recording, output)
     with TemporaryDirectory(prefix="steamrecordingsexporter-") as scratch:
         joined = []
@@ -85,11 +86,11 @@ def remove_chunks(recording: Recording) -> dict[Path, OSError]:
 def _check_output(recording: Recording, output: Path) -> None:
     """Refuse an output whose folder is missing or that is a file of the recording."""
     if not output.parent.is_dir():
-        raise ExportError(f"The output folder does not exist: {output.parent}")
+        raise ExportError(messages.OUTPUT_FOLDER_MISSING.format(folder=output.parent))
     if output.exists() and any(
         output.samefile(source) for source in (recording.manifest, *recording.chunks)
     ):
-        raise ExportError(f"The output would overwrite a file of the recording: {output}")
+        raise ExportError(messages.OUTPUT_IN_RECORDING.format(output=output))
 
 
 def _join(stream: Stream, target: Path, progress: ExportProgress) -> None:
@@ -117,11 +118,11 @@ def _merge(ffmpeg: str, streams: Sequence[Path], output: Path) -> None:
             arguments, check=True, capture_output=True, encoding="utf-8", errors="replace"
         )
         if partial.stat().st_size == 0:
-            raise ExportError("FFmpeg wrote an empty file")
+            raise ExportError(messages.EMPTY_OUTPUT)
         partial.replace(output)
     except subprocess.CalledProcessError as error:
         # FFmpeg ends its log with the reason it stopped.
         reason = next(reversed(error.stderr.strip().splitlines()), "")
-        raise ExportError(f"FFmpeg could not merge the streams: {reason}") from error
+        raise ExportError(messages.MERGE_FAILED.format(reason=reason)) from error
     finally:
         partial.unlink(missing_ok=True)

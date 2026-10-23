@@ -1,0 +1,47 @@
+"""The user-facing texts of the command line, its progress and the problems it reports."""
+
+COMMAND_HELP = "Export a Steam recording to a single video file."
+INPUT_HELP = "Recording folder holding session.mpd and the chunks it lists."
+OUTPUT_HELP = "Output file, or the folder to save it in as <recording folder name>.mp4."
+COMPACT_HELP = "Delete the recording's chunks once the export succeeds."
+
+JOINING = "Joining stream {id}"
+MERGING = "Merging the streams"
+EXPORTED = "Exported: {output}"
+EXPORTED_WITH_WARNING = "Exported with 1 warning: {output}"
+EXPORTED_WITH_WARNINGS = "Exported with {count} warnings: {output}"
+
+WARNING = "Warning: {message}"
+MISSING_SEGMENTS = (
+    "Stream {id!r} is missing {missing} of {total} segments ({ranges}), so the video will have gaps"
+)
+CHUNKS_LEFT = "Could not delete {failed} of {total} chunks: {error}"
+
+ERROR = "Error: {error}"
+FFMPEG_MISSING = "FFmpeg was not found on PATH; install it before exporting"
+OUTPUT_FOLDER_MISSING = "The output folder does not exist: {folder}"
+OUTPUT_IN_RECORDING = "The output would overwrite a file of the recording: {output}"
+EMPTY_OUTPUT = "FFmpeg wrote an empty file"
+MERGE_FAILED = "FFmpeg could not merge the streams: {reason}"
+
+MANIFEST_MISSING = "{manifest} was not found in {folder}"
+INITIALIZATION_MISSING = "Stream {id!r} has no initialization chunk {name}"
+SEGMENTS_MISSING = "Stream {id!r} has no media segments"
+CHUNK_OUTSIDE = "Chunk {name} is outside the recording folder"
+
+INVALID_XML = "The manifest is not valid XML: {error}"
+NOT_MPD = "The manifest is not a DASH MPD document"
+BASE_URL = "BaseURL paths are not supported"
+PERIOD_COUNT = "The manifest must have one Period, not {count}"
+NO_REPRESENTATIONS = "The manifest has no representations"
+DUPLICATE_IDS = "Representation IDs used more than once: {ids}"
+NO_ID = "A representation has no ID"
+INVALID_DURATION = "Invalid mediaPresentationDuration {duration!r}"
+REPRESENTATION_PROBLEM = "Representation {id!r}: {problem}"
+TEMPLATE_MISSING = "the SegmentTemplate has no {name}"
+REMOTE_TEMPLATE = "remote {name} paths are not supported: {text}"
+INITIALIZATION_NUMBER = "the initialization template must not use $Number$"
+MEDIA_NUMBER = "the media template must use $Number$"
+INVALID_VALUE = "invalid {name} {text!r}"
+UNBALANCED_DOLLAR = "unbalanced $ in {text!r}"
+UNSUPPORTED_IDENTIFIER = "unsupported identifier ${piece}$ in {text!r}"
