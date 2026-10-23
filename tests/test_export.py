@@ -3,7 +3,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-from ffmpeg import FFmpegError
 
 from steamrecordingsexporter.errors import ExportError
 from steamrecordingsexporter.export import export, remove_chunks
@@ -34,10 +33,10 @@ def test_merges_the_joined_streams_into_the_output(
 
 
 @pytest.mark.parametrize(
-    ("written", "error", "message"),
+    ("written", "returncode", "stderr", "message"),
     [
-        (b"MP4", FFmpegError("Invalid data", []), "could not merge"),
-        (b"", None, "empty file"),
+        (b"MP4", 1, "Opening input\nInvalid data\n", "could not merge the streams: Invalid data$"),
+        (b"", 0, "", "empty file"),
     ],
 )
 def test_failed_merge_keeps_the_previous_output_and_the_recording(
@@ -45,10 +44,11 @@ def test_failed_merge_keeps_the_previous_output_and_the_recording(
     folder: Path,
     ffmpeg: FakeFFmpeg,
     written: bytes,
-    error: Exception | None,
+    returncode: int,
+    stderr: str,
     message: str,
 ) -> None:
-    ffmpeg.output, ffmpeg.error = written, error
+    ffmpeg.output, ffmpeg.returncode, ffmpeg.stderr = written, returncode, stderr
     output = tmp_path / "clip.mp4"
     output.write_bytes(b"EARLIER")
     before = contents(folder)

@@ -1,10 +1,10 @@
 import shutil
+import subprocess
 from collections.abc import Iterable, Sequence
 from contextlib import suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ffmpeg import FFmpeg, FFmpegError
 from rich.progress import Progress
 
 from steamrecordingsexporter.errors import ExportError
@@ -72,23 +72,24 @@ def _merge(ffmpeg: str, streams: Sequence[Path], output: Path) -> None:
     # Written beside the output and moved over it only once complete, so a failed export keeps
     # the previous file.
     partial = output.with_name(f".{output.stem}.partial{output.suffix}")
-    command = FFmpeg(ffmpeg).option("y").option("nostdin")
     # Each stream keeps its own timestamps, so one that lost its first segments stays in sync.
-    command.option("copyts")
+    arguments = [ffmpeg, "-y", "-nostdin", "-copyts"]
     for stream in streams:
-        command.input(stream)
-    command.output(
-        partial,
-        codec="copy",
-        map=[str(index) for index in range(len(streams))],
-        avoid_negative_ts="make_zero",
-    )
+        arguments += ["-i", str(stream)]
+    arguments += ["-codec", "copy"]
+    for index in range(len(streams)):
+        arguments += ["-map", str(index)]
+    arguments += ["-avoid_negative_ts", "make_zero", str(partial)]
     try:
-        command.execute()
+        subprocess.run(
+            arguments, check=True, capture_output=True, encoding="utf-8", errors="replace"
+        )
         if partial.stat().st_size == 0:
             raise ExportError("FFmpeg wrote an empty file")
         partial.replace(output)
-    except FFmpegError as error:
-        raise ExportError(f"FFmpeg could not merge the streams: {error.message}") from error
+    except subprocess.CalledProcessError as error:
+        # FFmpeg ends its log with the reason it stopped.
+        reason = next(reversed(error.stderr.strip().splitlines()), "")
+        raise ExportError(f"FFmpeg could not merge the streams: {reason}") from error
     finally:
         partial.unlink(missing_ok=True)

@@ -1,6 +1,8 @@
+import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from steamrecordingsexporter.template import Template
 
@@ -18,23 +20,28 @@ class FFmpegRun:
 
 @dataclass
 class FakeFFmpeg:
-    """Stands in for FFmpeg: records each run and writes the configured output or fails."""
+    """Stands in for FFmpeg: records each run, writes the configured output and exits as told."""
 
     output: bytes = b"MP4"
-    error: Exception | None = None
+    returncode: int = 0
+    stderr: str = ""
     runs: list[FFmpegRun] = field(default_factory=list)
 
-    def execute(self, arguments: Sequence[str]) -> None:
-        """Record a run and act out the configured result.
+    def run(self, arguments: Sequence[str], **options: Any) -> subprocess.CompletedProcess[str]:
+        """Record a run and return or raise as subprocess.run would for the configured result.
 
         Args:
             arguments: The FFmpeg arguments, ending with the output path.
+            options: The subprocess.run options, of which check and capture_output take effect.
         """
         inputs = [Path(arguments[i + 1]) for i, value in enumerate(arguments) if value == "-i"]
         self.runs.append(FFmpegRun(arguments, [path.read_bytes() for path in inputs]))
         Path(arguments[-1]).write_bytes(self.output)
-        if self.error:
-            raise self.error
+        stderr = self.stderr if options.get("capture_output") else None
+        result = subprocess.CompletedProcess(arguments, self.returncode, "", stderr)
+        if options.get("check"):
+            result.check_returncode()
+        return result
 
 
 def write_recording(
