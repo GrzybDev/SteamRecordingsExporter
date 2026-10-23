@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from steamrecordingsexporter.errors import ExportError
-from steamrecordingsexporter.export import export, remove_chunks
-from steamrecordingsexporter.recording import load_recording
+from steamrecordingsexporter.export import ExportProgress, export, remove_chunks
+from steamrecordingsexporter.recording import Stream, load_recording
 from support import FakeFFmpeg, contents, write_recording
 
 
@@ -30,6 +30,29 @@ def test_merges_the_joined_streams_into_the_output(
     assert (tmp_path / "clip.mp4").read_bytes() == b"MP4"
     assert contents(folder) == before
     assert sorted(path.name for path in tmp_path.iterdir()) == ["clip", "clip.mp4"]
+
+
+def test_reports_the_progress_of_each_stream_and_the_merge(
+    tmp_path: Path, folder: Path, ffmpeg: FakeFFmpeg
+) -> None:
+    events: list[tuple[str, int]] = []
+
+    class Recorder(ExportProgress):
+        def joined(self, stream: Stream, chunks: int) -> None:
+            events.append((stream.id, chunks))
+
+        def merging(self) -> None:
+            events.append(("merging", len(ffmpeg.runs)))
+
+        def merged(self) -> None:
+            events.append(("merged", len(ffmpeg.runs)))
+
+    export(load_recording(folder), tmp_path / "clip.mp4", Recorder())
+    assert events == [
+        *((rep_id, chunks) for rep_id in ("0", "1") for chunks in (1, 2, 3)),
+        ("merging", 0),
+        ("merged", 1),
+    ]
 
 
 @pytest.mark.parametrize(

@@ -1,23 +1,42 @@
 import shutil
 import subprocess
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from contextlib import suppress
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from rich.progress import Progress
-
 from steamrecordingsexporter.errors import ExportError
-from steamrecordingsexporter.recording import Recording
+from steamrecordingsexporter.recording import Recording, Stream
 
 
-def export(recording: Recording, output: Path, progress: Progress | None = None) -> None:
+class ExportProgress:
+    """Receives how far an export has got; each method does nothing unless overridden."""
+
+    def joined(self, stream: Stream, chunks: int) -> None:
+        """Report how many chunks of a stream are joined so far.
+
+        Args:
+            stream: The stream being joined.
+            chunks: How many of its chunks are joined.
+        """
+
+    def merging(self) -> None:
+        """Report that the merge of the joined streams has started."""
+
+    def merged(self) -> None:
+        """Report that the merge has finished."""
+
+
+_SILENT = ExportProgress()
+
+
+def export(recording: Recording, output: Path, progress: ExportProgress = _SILENT) -> None:
     """Join the chunks of each stream and merge the streams into output without re-encoding.
 
     Args:
         recording: The recording to export.
         output: The file to write.
-        progress: The progress display to update, if any.
+        progress: Receives how far the export has got.
 
     Raises:
         ExportError: If FFmpeg is missing, the output is unsafe or the merge fails.
@@ -26,16 +45,15 @@ def export(recording: Recording, output: Path, progress: Progress | None = None)
     if ffmpeg is None:
         raise ExportError("FFmpeg was not found on PATH; install it before exporting")
     _check_output(recording, output)
-    progress = progress or Progress(disable=True)
     with TemporaryDirectory(prefix="steamrecordingsexporter-") as scratch:
         joined = []
         for index, stream in enumerate(recording.streams):
             target = Path(scratch, f"stream-{index}.m4s")
-            _join(progress.track(stream.chunks, description=f"Joining stream {stream.id}"), target)
+            _join(stream, target, progress)
             joined.append(target)
-        task = progress.add_task("Merging the streams", total=None)
+        progress.merging()
         _merge(ffmpeg, joined, output)
-        progress.update(task, total=1, completed=1)
+        progress.merged()
 
 
 def remove_chunks(recording: Recording) -> dict[Path, OSError]:
@@ -74,11 +92,12 @@ def _check_output(recording: Recording, output: Path) -> None:
         raise ExportError(f"The output would overwrite a file of the recording: {output}")
 
 
-def _join(chunks: Iterable[Path], target: Path) -> None:
+def _join(stream: Stream, target: Path, progress: ExportProgress) -> None:
     with target.open("wb") as joined:
-        for chunk in chunks:
+        for count, chunk in enumerate(stream.chunks, start=1):
             with chunk.open("rb") as source:
                 shutil.copyfileobj(source, joined)
+            progress.joined(stream, count)
 
 
 def _merge(ffmpeg: str, streams: Sequence[Path], output: Path) -> None:

@@ -35,14 +35,19 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "UP", "SIM", "PTH", "RUF", "D"]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "PTH", "RUF", "D", "TID"]
 # Modules, packages and types say what they hold through their names; a type whose name
 # does not gets a docstring by hand.
 ignore = ["D100", "D101", "D104"]
 
 [tool.ruff.lint.per-file-ignores]
+"src/steamrecordingsexporter/cli.py" = ["TID251"]
 # Test names say what each test proves.
-"tests/**" = ["D1"]
+"tests/**" = ["D1", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"rich".msg = "Only the command line shows progress."
+"typer".msg = "Only the command line parses arguments."
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
