@@ -12,7 +12,16 @@ from steamrecordingsexporter.recording import Recording
 
 
 def export(recording: Recording, output: Path, progress: Progress | None = None) -> None:
-    """Join the chunks of each stream and merge the streams into output without re-encoding."""
+    """Join the chunks of each stream and merge the streams into output without re-encoding.
+
+    Args:
+        recording: The recording to export.
+        output: The file to write.
+        progress: The progress display to update, if any.
+
+    Raises:
+        ExportError: If FFmpeg is missing, the output is unsafe or the merge fails.
+    """
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         raise ExportError("FFmpeg was not found on PATH; install it before exporting")
@@ -33,6 +42,9 @@ def remove_chunks(recording: Recording) -> dict[Path, OSError]:
     """Delete the chunks of the recording and the folders they leave empty.
 
     Returns the chunks that could not be deleted, since the export is complete by then.
+
+    Args:
+        recording: The exported recording.
     """
     failures = {}
     for chunk in recording.chunks:
@@ -53,6 +65,7 @@ def remove_chunks(recording: Recording) -> dict[Path, OSError]:
 
 
 def _check_output(recording: Recording, output: Path) -> None:
+    """Refuse an output whose folder is missing or that is a file of the recording."""
     if not output.parent.is_dir():
         raise ExportError(f"The output folder does not exist: {output.parent}")
     if output.exists() and any(

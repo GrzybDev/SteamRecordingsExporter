@@ -18,6 +18,13 @@ _DURATION = re.compile(
 
 @dataclass(frozen=True)
 class Representation:
+    """A stream of the manifest with the templates that name its chunks.
+
+    Attributes:
+        segment_count: How many segments fill the declared duration, or None when the
+            manifest declares no duration.
+    """
+
     id: str
     initialization: Template
     media: Template
@@ -26,6 +33,15 @@ class Representation:
 
 
 def parse_manifest(data: bytes) -> list[Representation]:
+    """Read the representations of a DASH manifest that the export supports.
+
+    Args:
+        data: The bytes of the manifest.
+
+    Raises:
+        ExportError: If the manifest is invalid or uses a feature the export does not
+            support.
+    """
     try:
         root = ET.fromstring(data)
     except ET.ParseError as error:
@@ -99,6 +115,7 @@ def _segment_count(attributes: dict[str, str], seconds: Fraction | None) -> int 
 
 
 def _seconds(duration: str) -> Fraction:
+    """Return the length of an ISO 8601 duration such as PT1H2M3.5S in seconds."""
     match = _DURATION.fullmatch(duration.strip())
     if not match:
         raise ExportError(f"Invalid mediaPresentationDuration {duration!r}")
@@ -107,6 +124,7 @@ def _seconds(duration: str) -> Fraction:
 
 
 def _integer(text: str, name: str, minimum: int) -> int:
+    """Return the decimal attribute value, refusing one below the minimum."""
     if not text.strip().isdecimal() or int(text) < minimum:
         raise ValueError(f"invalid {name} {text!r}")
     return int(text)

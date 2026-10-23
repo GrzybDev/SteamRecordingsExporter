@@ -10,6 +10,8 @@ MANIFEST = "session.mpd"
 
 @dataclass(frozen=True)
 class Stream:
+    """The chunks of a stream found on disk and the numbers of its missing segments."""
+
     id: str
     initialization: Path
     segments: tuple[Path, ...]
@@ -17,6 +19,7 @@ class Stream:
 
     @property
     def chunks(self) -> tuple[Path, ...]:
+        """The initialization chunk followed by the segments in order."""
         return (self.initialization, *self.segments)
 
 
@@ -27,15 +30,25 @@ class Recording:
 
     @property
     def manifest(self) -> Path:
+        """The manifest of the recording."""
         return self.folder / MANIFEST
 
     @property
     def chunks(self) -> tuple[Path, ...]:
+        """Every chunk of the recording, each listed once."""
         # Streams may share an initialization chunk.
         return tuple(dict.fromkeys(chunk for stream in self.streams for chunk in stream.chunks))
 
 
 def load_recording(folder: Path) -> Recording:
+    """Read the manifest of the recording and find the chunks of each stream.
+
+    Args:
+        folder: The recording folder holding session.mpd.
+
+    Raises:
+        ExportError: If the manifest or the chunks of a stream cannot be used.
+    """
     folder = folder.resolve()
     manifest = folder / MANIFEST
     if not manifest.is_file():
@@ -65,6 +78,7 @@ def _stream(folder: Path, representation: Representation, names: set[str]) -> St
 
 
 def _chunk(folder: Path, name: str) -> Path:
+    """Return the path of a chunk, refusing one outside the recording folder."""
     path = Path(os.path.normpath(folder / name))
     if not path.is_relative_to(folder):
         raise ExportError(f"Chunk {name} is outside the recording folder")

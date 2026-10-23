@@ -38,6 +38,13 @@ def main(
         ),
     ] = False,
 ) -> None:
+    """Export the recording to a video file, reporting warnings and errors.
+
+    Args:
+        input_dir: The recording folder.
+        output_file: The output file, or the folder to save it in.
+        compact: Whether to delete the recording's chunks after a successful export.
+    """
     try:
         recording = load_recording(input_dir)
         output = _output_path(output_file, recording)
@@ -64,6 +71,7 @@ def main(
 
 
 def _output_path(output: Path | None, recording: Recording) -> Path:
+    """Return the output file, naming it after the recording when given a folder or none."""
     output = (output or Path.cwd()).resolve()
     if output.is_dir():
         return output / f"{recording.folder.name}.mp4"
@@ -85,6 +93,7 @@ def _removal_warning(failures: dict[Path, OSError], recording: Recording) -> str
 
 
 def _ranges(numbers: Sequence[int]) -> str:
+    """Collapse sorted numbers into ranges such as "2-5, 9"."""
     spans: list[list[int]] = []
     for number in numbers:
         if spans and spans[-1][1] == number - 1:

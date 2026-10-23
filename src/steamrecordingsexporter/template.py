@@ -25,20 +25,40 @@ class Template:
     """A SegmentTemplate path with the $RepresentationID$, $Number$ and $$ identifiers of DASH."""
 
     def __init__(self, text: str) -> None:
+        """Parse the template.
+
+        Args:
+            text: The SegmentTemplate path.
+
+        Raises:
+            ValueError: If the template uses an identifier that cannot be resolved.
+        """
         self._parts = tuple(_parse(text))
 
     @property
     def uses_number(self) -> bool:
+        """Whether the template holds the $Number$ identifier."""
         return any(isinstance(part, _Identifier) and part.name == "Number" for part in self._parts)
 
     def format(self, representation_id: str, number: int | None = None) -> str:
+        """Return the path that the template gives a representation and segment.
+
+        Args:
+            representation_id: The value of $RepresentationID$.
+            number: The value of $Number$, when the template uses it.
+        """
         return "".join(
             part if isinstance(part, str) else part.resolve(representation_id, number)
             for part in self._parts
         )
 
     def numbers(self, representation_id: str, names: Iterable[str]) -> set[int]:
-        """Return the segment numbers of the names that this template gives the representation."""
+        """Return the segment numbers of the names that this template gives the representation.
+
+        Args:
+            representation_id: The value of $RepresentationID$.
+            names: The relative paths of the files to match.
+        """
         pattern = re.compile(
             "".join(
                 re.escape(part) if isinstance(part, str) else part.pattern(representation_id)
@@ -55,6 +75,7 @@ class Template:
 
 
 def _parse(text: str) -> Iterator[str | _Identifier]:
+    """Split the template into literal text and identifiers."""
     pieces = text.split("$")
     if len(pieces) % 2 == 0:
         raise ValueError(f"unbalanced $ in {text!r}")
